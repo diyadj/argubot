@@ -1,0 +1,29 @@
+# Core
+pyyaml
+numpy
+pytest
+
+# Models and training (Colab already has torch)
+torch
+transformers
+peft
+accelerate
+datasets
+sentence-transformers
+
+# Retrieval
+rank_bm25
+faiss-cpu
+
+# Claim tracker
+spacy
+# then run: python -m spacy download en_core_web_sm
+
+# Data
+convokit
+
+# Notes
+# - Qwen3.5 is new, so use a recent transformers release. If it will not load,
+#   switch generator.base_model to the fallback in configs/config.yaml.
+# - Pin the versions that worked for your training run before the final submission,
+#   then paste the pinned list here so the report's "how to run" section is exact.

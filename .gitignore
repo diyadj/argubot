@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+.ipynb_checkpoints/
+.pytest_cache/
+
+# Large or regenerated files. Rebuild them with the scripts in scripts/.
+data/raw/*
+data/processed/*
+data/indexes/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/indexes/.gitkeep
+outputs/*
+!outputs/.gitkeep
+checkpoints/

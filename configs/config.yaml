@@ -1,0 +1,84 @@
+# Single source of truth for every setting. Scripts and notebooks read this file,
+# so nothing about the experiment is hardcoded elsewhere. The report's hyperparameter
+# table is generated from it with: python scripts/print_hparams.py
+
+seed: 42
+
+paths:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  index_dir: data/indexes
+  output_dir: outputs
+  cmv_chains: data/processed/cmv_chains.jsonl
+  train_examples: data/processed/train_examples.jsonl
+  val_examples: data/processed/val_examples.jsonl
+  test_dialogues: data/processed/test_dialogues.jsonl
+  passages: data/processed/passages.jsonl
+  adapter_dir: outputs/adapter
+  transcripts_dir: outputs/transcripts
+  results_dir: outputs/results
+  rating_dir: outputs/human_eval
+
+data:
+  split_ratios: [0.8, 0.1, 0.1]   # train / validation / test, split by thread
+  min_turns: 3
+  max_turns: 6
+  bot_reply_max_tokens: 150
+  passage_max_words: 120          # keeps every passage inside the NLI model's 512 token limit
+
+claims:
+  max_claims: 5
+  dedup_threshold: 0.8            # word-set Jaccard above this counts as the same claim
+
+retrieval:
+  method: bm25                    # bm25 or dense
+  top_k_retrieve: 10
+  top_k_keep: 3
+  dense_model: sentence-transformers/all-MiniLM-L6-v2
+  backup_index: ibm_argq          # used when args.me results are weak
+
+prompt:
+  max_history_turns: 6
+  max_passage_words: 80
+
+generator:
+  base_model: Qwen/Qwen3.5-0.8B-Base
+  # Approved by the professor earlier. For gpt2-medium set lora.target_modules to [c_attn]
+  # and training.max_seq_len to 1024 or lower (its context window).
+  fallback_model: gpt2-medium
+
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: all-linear      # Qwen3.5 mixes Gated DeltaNet and attention layers
+
+training:
+  max_seq_len: 1024
+  per_device_batch_size: 4
+  grad_accum_steps: 4
+  learning_rate: 2.0e-4
+  num_epochs: 3
+  warmup_ratio: 0.03
+  fp16: true                      # a T4 has no bf16. Watch for NaNs and fall back to fp32 if needed.
+  p_blank_claims: 0.25            # slot blanking so one adapter serves all five systems
+  p_blank_evidence: 0.25
+  max_train_examples: null        # set a number if the full set will not fit in the Colab time limit
+
+decoding:
+  temperature: 0.8
+  top_p: 0.9
+  max_new_tokens: 150
+  n_candidates_rerank: 5          # only system D uses more than one candidate
+
+nli:
+  model: roberta-large-mnli
+  contradiction_threshold: 0.5
+  max_length: 512
+  min_reply_words: 5              # the reranker ignores replies shorter than this (claim-free loophole)
+
+eval:
+  n_boot: 10000
+  ci_alpha: 0.05
+  human_eval_dialogues_per_system: 20
+  n_raters: 2

@@ -1,0 +1,77 @@
+# ArguBot
+
+A retrieval-augmented, consistency-tracking debate dialogue system. CS425, group G2T3.
+
+ArguBot argues one side of a debate over several turns, grounds each reply in retrieved arguments, and keeps a log of its own earlier claims so it does not contradict itself. The hypothesis is that a generator conditioned on that claim log contradicts itself less than one that only sees the conversation history.
+
+## Quick start
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+pytest                                  # all tests should pass
+python scripts/run_systems.py --dummy   # fake components, checks the wiring end to end
+python scripts/evaluate.py --dummy      # prints a results table (numbers are meaningless)
+```
+
+For real runs also install the ML stack with `pip install -r requirements.txt` and `python -m spacy download en_core_web_sm`. Colab already has torch.
+
+The `--dummy` runs use fake components and the toy data in `data/toy`. They only prove that the pieces fit together. Never put their numbers in the report.
+
+## The five systems
+
+Each system adds exactly one component to the one before it, so any difference between neighbours has one cause.
+
+| System | Configuration | Question it answers |
+| --- | --- | --- |
+| A | Conversation history only | Where does the fine-tuned model land on its own? |
+| B | A plus retrieved supporting arguments | Does retrieval make replies better grounded? |
+| C1 | B plus the claim log | Does the claim log reduce contradictions? (the core test, C1 against B) |
+| C2 | C1 plus the stance-consistency filter | Does removing clashing passages help further? |
+| D | C2 plus 5-candidate reranking | Does choosing the most consistent reply help further? |
+
+## Running the whole project
+
+Run these from the repo root. This is also the draft of the report's "how to run" section, so keep it accurate.
+
+1. `python scripts/download_data.py --cmv` downloads CMV. args.me and IBM-ArgQ are manual, see the script.
+2. `python scripts/build_cmv_chains.py` builds persona dialogues, split by thread.
+3. `python scripts/build_indexes.py` builds the passages file and the retrieval indexes.
+4. `python scripts/build_training_data.py` fills the claim and evidence slots for training.
+5. `python scripts/train_lora.py` trains the adapter (or use the training notebook).
+6. `python scripts/run_systems.py` runs A, B, C1, C2 and D on the test debates.
+7. `python scripts/evaluate.py` computes contradiction rate, guardrails and bootstrap intervals.
+8. `python scripts/make_rating_sheets.py` writes blinded sheets for the two human raters.
+9. `python scripts/print_hparams.py` prints the hyperparameter table for the report.
+
+## What is finished and what is not
+
+| Part | State |
+| --- | --- |
+| Prompt builder, slot blanking, reply-only labels, collator | Done and tested |
+| Five-system pipeline, specs, seeds | Done and tested |
+| Claim tracker (regex path and spaCy path) | Working, needs tuning on real CMV replies |
+| NLI scorer, reranker, both-direction check | Working (RoBERTa path untested until the model is downloaded) |
+| BM25 retriever, stance filter | Working |
+| Contradiction rate, distinct-2, bootstrap, kappa, rating sheets | Done and tested |
+| Thread split, comment cleaning, passage splitting | Done and tested |
+| CMV persona extraction | TODO (Tricia) |
+| args.me and IBM-ArgQ loading, dense retrieval | TODO (Diya) |
+| Training run and the notebooks | TODO (Andrea), see `docs/NOTEBOOK_ADAPTATION.md` |
+| Training data builder | TODO (Tricia and Diya) |
+| Real download links | TODO (Tricia and Diya) |
+
+## Layout
+
+```
+configs/config.yaml     every setting, nothing hardcoded elsewhere
+src/argubot/            the package (prompt, claims, retrieval, nli, generate, systems, eval, data)
+scripts/                one command per stage of the project
+tests/                  pytest suite, run it before every push
+data/toy/               tiny files for the --dummy runs
+docs/                   interface contract, owners and dates, notebook notes
+notebooks/              thin runners (to be written, see docs/NOTEBOOK_ADAPTATION.md)
+outputs/                transcripts, results and rating sheets (not committed)
+```
+
+Read `docs/INTERFACES.md` before you change anything that another lane calls.

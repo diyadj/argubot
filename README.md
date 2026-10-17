@@ -70,7 +70,8 @@ Run these from the repo root. This is also the draft of the report's "how to run
 configs/config.yaml     every setting, nothing hardcoded elsewhere
 src/argubot/            the package (prompt, claims, retrieval, nli, generate, systems, eval, data)
 scripts/                one command per stage of the project
-web/                    the one-page chat demo
+web/                    the chat demo: index.html is built from the React source in web/app/
+                        (edit UI: cd web/app, npm install, npm run dev; then npm run build to update index.html)
 tests/                  pytest suite, run it before every push
 data/toy/               tiny files for the --dummy runs
 docs/                   interface contract, owners and dates, notebook notes

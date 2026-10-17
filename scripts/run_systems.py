@@ -9,13 +9,10 @@ Real run, once the adapter and the passages file exist:
 import argparse
 
 from argubot.config import ensure_dir, load_config
-from argubot.generate.generator import DummyGenerator, HFGenerator
 from argubot.io import read_jsonl, write_jsonl
-from argubot.nli.scorer import DummyNLIScorer, RobertaMNLIScorer
-from argubot.retrieval.bm25 import BM25Retriever
-from argubot.retrieval.dummy import DummyRetriever
-from argubot.schemas import Dialogue, Passage
+from argubot.schemas import Dialogue
 from argubot.systems import ArguBotPipeline, build_systems
+from argubot.systems.components import load_components
 
 
 def main() -> None:
@@ -34,23 +31,7 @@ def main() -> None:
 
     if args.dummy:
         print("DUMMY RUN: fake generator, retriever and NLI. Numbers are meaningless.")
-        passages = [Passage.from_dict(d) for d in read_jsonl("data/toy/toy_passages.jsonl")]
-        generator, retriever, nli = DummyGenerator(), DummyRetriever(passages), DummyNLIScorer()
-    else:
-        d = cfg["decoding"]
-        generator = HFGenerator(
-            cfg["generator"]["base_model"],
-            cfg["paths"]["adapter_dir"],
-            max_new_tokens=d["max_new_tokens"],
-            temperature=d["temperature"],
-            top_p=d["top_p"],
-            max_prompt_tokens=cfg["training"]["max_seq_len"],
-        )
-        passages = [Passage.from_dict(x) for x in read_jsonl(cfg["paths"]["passages"])]
-        if cfg["retrieval"]["method"] != "bm25":
-            raise NotImplementedError("Dense retrieval is Diya's TODO, use method: bm25 for now")
-        retriever = BM25Retriever(passages)
-        nli = RobertaMNLIScorer(cfg["nli"]["model"], max_length=cfg["nli"]["max_length"])
+    generator, retriever, nli = load_components(cfg, dummy=args.dummy)
 
     systems = build_systems(cfg["decoding"]["n_candidates_rerank"])
     for name in args.systems:

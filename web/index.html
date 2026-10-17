@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ArguBot demo</title>
+<style>
+  :root { --bg:#fafafa; --card:#fff; --line:#ddd; --text:#222; --muted:#666; --accent:#2b5fab; --user:#e8effa; --bot:#f1f1f1; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#16181c; --card:#1f2228; --line:#363b44; --text:#e6e6e6; --muted:#9aa0a8; --accent:#6c9bff; --user:#26364f; --bot:#2a2e35; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.45 system-ui, sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0 auto 0 0; }
+  select, button, input { font:inherit; color:inherit; background:var(--card); border:1px solid var(--line); border-radius:6px; padding:6px 10px; }
+  button { cursor:pointer; background:var(--accent); color:#fff; border-color:var(--accent); }
+  main { display:grid; grid-template-columns:1fr 320px; gap:16px; padding:16px; max-width:1100px; margin:auto; }
+  @media (max-width:760px) { main { grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; }
+  #chat { height:55vh; overflow-y:auto; display:flex; flex-direction:column; gap:8px; }
+  .msg { padding:8px 12px; border-radius:8px; max-width:85%; white-space:pre-wrap; }
+  .user { background:var(--user); align-self:flex-end; }
+  .bot { background:var(--bot); align-self:flex-start; }
+  form { display:flex; gap:8px; margin-top:12px; }
+  form input { flex:1; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:0 0 6px; }
+  ul { margin:0 0 14px; padding-left:18px; }
+  li { margin-bottom:4px; }
+  .empty { color:var(--muted); font-style:italic; }
+  #note { padding:8px 16px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ArguBot</h1>
+  <label>System
+    <select id="system"></select>
+  </label>
+  <button id="reset" type="button">New debate</button>
+</header>
+<div id="note"></div>
+<main>
+  <section class="card">
+    <div id="chat"></div>
+    <form id="form">
+      <input id="msg" autocomplete="off" placeholder="Argue with the bot..." required>
+      <button>Send</button>
+    </form>
+  </section>
+  <aside class="card">
+    <h2>Claim log in the bot's prompt</h2>
+    <ul id="shown"></ul>
+    <h2>Claims tracked so far</h2>
+    <ul id="tracked"></ul>
+    <h2>Retrieved passages</h2>
+    <ul id="passages"></ul>
+  </aside>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let session = null;
+
+async function post(path, body) {
+  const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || r.statusText);
+  return data;
+}
+
+function add(kind, text) {
+  const d = document.createElement("div");
+  d.className = "msg " + kind;
+  d.textContent = text;
+  $("chat").appendChild(d);
+  $("chat").scrollTop = $("chat").scrollHeight;
+}
+
+function fill(id, items, emptyText) {
+  const ul = $(id);
+  ul.innerHTML = "";
+  if (!items.length) { const li = document.createElement("li"); li.className = "empty"; li.textContent = emptyText; ul.appendChild(li); return; }
+  items.forEach((t) => { const li = document.createElement("li"); li.textContent = t; ul.appendChild(li); });
+}
+
+function clearPanels() {
+  fill("shown", [], "none yet");
+  fill("tracked", [], "none yet");
+  fill("passages", [], "none yet");
+}
+
+async function newDebate() {
+  $("chat").innerHTML = "";
+  clearPanels();
+  session = (await post("/api/new", { system: $("system").value })).session;
+}
+
+async function init() {
+  const info = await (await fetch("/api/info")).json();
+  info.systems.forEach((s) => { const o = document.createElement("option"); o.value = s; o.textContent = s; $("system").appendChild(o); });
+  $("system").value = info.systems.includes("C1") ? "C1" : info.systems[0];
+  $("note").textContent = info.dummy
+    ? "Dummy mode: replies are canned lines, only the wiring is real."
+    : "A: history only. B: plus retrieval. C1: plus claim log. C2: plus stance filter. D: plus 5-candidate reranking.";
+  await newDebate();
+}
+
+$("system").addEventListener("change", newDebate);
+$("reset").addEventListener("click", newDebate);
+$("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = $("msg").value.trim();
+  if (!text) return;
+  $("msg").value = "";
+  add("user", text);
+  try {
+    const out = await post("/api/chat", { session, message: text });
+    add("bot", out.reply);
+    fill("shown", out.claims_shown_to_bot, "none (this system does not see the claim log)");
+    fill("tracked", out.claim_log_now, "none yet");
+    fill("passages", out.passages, "none (this system does not retrieve)");
+  } catch (err) {
+    add("bot", "Error: " + err.message);
+  }
+});
+init();
+</script>
+</body>
+</html>

@@ -74,42 +74,53 @@ class ArguBotPipeline:
             return candidates[best]
         return candidates[0]
 
+    def step(
+        self,
+        history: List[Turn],
+        tracker: ClaimTracker,
+        user_turn: Turn,
+        dialogue_id: str,
+        turn_index: int,
+    ) -> TurnRecord:
+        """Answer one user turn. Appends both turns to history and feeds the reply to the tracker.
+
+        run_debate and the live chat app both go through here, so the demo behaves
+        exactly like the systems that were evaluated.
+        """
+        p = self.cfg["prompt"]
+        history.append(user_turn)
+        # The tracker always listens to the bot so the metrics can use it, but only
+        # systems C1 to D are allowed to show the claim log to the generator.
+        claims = list(tracker.claims) if self.spec.use_claims else []
+        passages = self._passages_for(user_turn.text, claims)
+        prompt = build_prompt(
+            history,
+            claims,
+            [ps.text for ps in passages],
+            max_history_turns=p["max_history_turns"],
+            max_passage_words=p["max_passage_words"],
+        )
+        seed = turn_seed(self.cfg["seed"], dialogue_id, turn_index)
+        candidates = self.generator.generate(prompt, n=self.spec.n_candidates, seed=seed)
+        reply = self._choose(candidates, claims)
+
+        history.append(Turn("bot", reply))
+        tracker.update(reply)
+        return TurnRecord(
+            user_text=user_turn.text,
+            bot_text=reply,
+            claims_in_prompt=claims,
+            passages_in_prompt=[ps.text for ps in passages],
+            candidates=list(candidates),
+            prompt=prompt,
+        )
+
     def run_debate(self, dialogue: Dialogue) -> Transcript:
         """Replay the scripted user turns and let the system answer each one."""
         tracker = self.tracker_factory()
         history: List[Turn] = []
         records: List[TurnRecord] = []
-        p = self.cfg["prompt"]
-
         user_turns = [t for t in dialogue.turns if t.speaker == "user"]
         for i, user_turn in enumerate(user_turns):
-            history.append(user_turn)
-            # The tracker always listens to the bot so the metrics can use it, but only
-            # systems C1 to D are allowed to show the claim log to the generator.
-            claims = list(tracker.claims) if self.spec.use_claims else []
-            passages = self._passages_for(user_turn.text, claims)
-            prompt = build_prompt(
-                history,
-                claims,
-                [ps.text for ps in passages],
-                max_history_turns=p["max_history_turns"],
-                max_passage_words=p["max_passage_words"],
-            )
-            seed = turn_seed(self.cfg["seed"], dialogue.dialogue_id, i)
-            candidates = self.generator.generate(prompt, n=self.spec.n_candidates, seed=seed)
-            reply = self._choose(candidates, claims)
-
-            records.append(
-                TurnRecord(
-                    user_text=user_turn.text,
-                    bot_text=reply,
-                    claims_in_prompt=claims,
-                    passages_in_prompt=[ps.text for ps in passages],
-                    candidates=list(candidates),
-                    prompt=prompt,
-                )
-            )
-            history.append(Turn("bot", reply))
-            tracker.update(reply)
-
+            records.append(self.step(history, tracker, user_turn, dialogue.dialogue_id, i))
         return Transcript(dialogue_id=dialogue.dialogue_id, system=self.spec.name, turns=records)

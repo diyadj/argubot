@@ -103,3 +103,32 @@ def test_missing_components_fail_loudly():
         ArguBotPipeline(SYSTEMS["B"], ScriptedGenerator(), CFG)
     with pytest.raises(ValueError):
         ArguBotPipeline(SYSTEMS["D"], ScriptedGenerator(), CFG, retriever=DummyRetriever([]))
+
+
+def test_step_matches_run_debate_and_grows_history():
+    """The live demo calls step() turn by turn, so it must give the same replies as run_debate."""
+    from argubot.config import load_config
+    from argubot.generate.generator import DummyGenerator
+    from argubot.nli.scorer import DummyNLIScorer
+    from argubot.retrieval.dummy import DummyRetriever
+    from argubot.schemas import Dialogue, Turn
+    from argubot.systems import ArguBotPipeline, build_systems
+
+    cfg = load_config("configs/config.yaml")
+    pipe = ArguBotPipeline(
+        build_systems(cfg["decoding"]["n_candidates_rerank"])["C1"],
+        DummyGenerator(),
+        cfg,
+        retriever=DummyRetriever([]),
+        nli=DummyNLIScorer(),
+    )
+    d = Dialogue("t1", [Turn("user", "Uniforms are bad."), Turn("user", "What about cost?")])
+    full = pipe.run_debate(d)
+
+    tracker, history = pipe.tracker_factory(), []
+    replies = [
+        pipe.step(history, tracker, t, "t1", i).bot_text
+        for i, t in enumerate(x for x in d.turns if x.speaker == "user")
+    ]
+    assert replies == full.bot_replies()
+    assert len(history) == 4

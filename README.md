@@ -12,6 +12,7 @@ pip install -e ".[dev]"
 pytest                                  # all tests should pass
 python scripts/run_systems.py --dummy   # fake components, checks the wiring end to end
 python scripts/evaluate.py --dummy      # prints a results table (numbers are meaningless)
+python scripts/serve_demo.py --dummy    # chat demo at http://127.0.0.1:8000 (fake replies)
 ```
 
 For real runs also install the ML stack with `pip install -r requirements.txt` and `python -m spacy download en_core_web_sm`. Colab already has torch.
@@ -43,6 +44,7 @@ Run these from the repo root. This is also the draft of the report's "how to run
 7. `python scripts/evaluate.py` computes contradiction rate, guardrails and bootstrap intervals.
 8. `python scripts/make_rating_sheets.py` writes blinded sheets for the two human raters.
 9. `python scripts/print_hparams.py` prints the hyperparameter table for the report.
+10. `python scripts/serve_demo.py` opens the chat demo for the presentation (pick a system, see the claim log and retrieved passages next to each reply).
 
 ## What is finished and what is not
 
@@ -54,6 +56,7 @@ Run these from the repo root. This is also the draft of the report's "how to run
 | NLI scorer, reranker, both-direction check | Working (RoBERTa path untested until the model is downloaded) |
 | BM25 retriever, stance filter | Working |
 | Contradiction rate, distinct-2, bootstrap, kappa, rating sheets | Done and tested |
+| Chat demo page (`scripts/serve_demo.py`, `web/index.html`) | Works with `--dummy`, real mode untested until the adapter exists |
 | Thread split, comment cleaning, passage splitting | Done and tested |
 | CMV persona extraction | TODO (Tricia) |
 | args.me and IBM-ArgQ loading, dense retrieval | TODO (Diya) |
@@ -67,6 +70,7 @@ Run these from the repo root. This is also the draft of the report's "how to run
 configs/config.yaml     every setting, nothing hardcoded elsewhere
 src/argubot/            the package (prompt, claims, retrieval, nli, generate, systems, eval, data)
 scripts/                one command per stage of the project
+web/                    the one-page chat demo
 tests/                  pytest suite, run it before every push
 data/toy/               tiny files for the --dummy runs
 docs/                   interface contract, owners and dates, notebook notes

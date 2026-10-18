@@ -6,7 +6,7 @@ The cell-by-cell list of changes is in `docs/NOTEBOOK_ADAPTATION.md`.
 | Notebook | Status | What it does |
 | --- | --- | --- |
 | `01_smoke_test.ipynb` | done | Load the model (Qwen3.5, gpt2-medium fallback), confirm `all-linear`, one LoRA step on `data/toy/toy_train_examples.jsonl`, record trainable params + sec/step, generate one reply. |
-| `02_train.ipynb` | todo | Needs `train()` in `generate/training.py`. Load config + examples, train, save adapter, print validation perplexity. |
+| `02_train.ipynb` | done | Runs `train()` from `generate/training.py`: load config + examples, train (eval each epoch), save the adapter, print validation perplexity. Falls back to toy data if the real set isn't built yet. |
 | `03_run_and_evaluate.ipynb` | todo | Run `scripts/run_systems.py` and `scripts/evaluate.py` for all five systems; show the results table. |
 | `04_demo.ipynb` | todo | Interactive loop (10 Nov): one pipeline, one `ClaimTracker` across turns, print the claim log and retrieved passages next to each reply. |
 

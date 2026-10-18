@@ -6,6 +6,7 @@ at random every epoch, and the LoRA config. Left for Andrea: the actual Trainer 
 from __future__ import annotations
 
 import random
+from dataclasses import dataclass
 from typing import Any, Dict, List, Sequence
 
 from argubot.prompt import training_example_to_pair
@@ -117,15 +118,191 @@ def build_lora_config(cfg: Dict[str, Any]):
     )
 
 
-def train(cfg: Dict[str, Any]) -> None:
-    """TODO (Andrea): wire the pieces above into a Trainer run.
+@dataclass
+class TrainResult:
+    """What train() hands back so a notebook can evaluate without rebuilding anything."""
 
-      1. Load the config model and tokenizer, set pad_token only if it is missing.
-      2. get_peft_model(model, build_lora_config(cfg)), then print_trainable_parameters()
-         and write that number down for the report (about 1% of the weights).
-      3. Build ReplyOnlyDataset for train (train=True) and validation (train=False).
-      4. Trainer with ReplyOnlyCollator, eval each epoch, and log the settings you tuned.
-      5. model.save_pretrained(cfg["paths"]["adapter_dir"]) saves the adapter only.
-      6. Record training time and GPU so the report can state them.
+    model: Any
+    tokenizer: Any
+    train_dataset: Any
+    val_dataset: Any
+    trainable_params: int
+    total_params: int
+    train_seconds: float
+    model_name: str
+    adapter_dir: str
+    device: str
+
+
+def _load_base(model_name: str, dtype):
+    """Load tokenizer + causal LM, tolerant of the torch_dtype -> dtype rename and a missing pad token."""
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    tok = AutoTokenizer.from_pretrained(model_name)
+    if tok.pad_token is None:            # only set pad if the tokenizer has none
+        tok.pad_token = tok.eos_token
+    tok.truncation_side = "left"         # keep the [response] tag; drop the oldest text instead
+    try:
+        model = AutoModelForCausalLM.from_pretrained(model_name, dtype=dtype)
+    except TypeError:                    # older transformers still use torch_dtype
+        model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=dtype)
+    return tok, model
+
+
+def _training_argument_names(training_arguments_cls) -> set:
+    """The kwargs a given transformers TrainingArguments accepts; the field set varies by version."""
+    import dataclasses
+    import inspect
+
+    names: set = set()
+    try:
+        names |= {f.name for f in dataclasses.fields(training_arguments_cls)}
+    except TypeError:
+        pass
+    try:
+        names |= set(inspect.signature(training_arguments_cls.__init__).parameters) - {"self"}
+    except (TypeError, ValueError):
+        pass
+    return names
+
+
+def train(cfg: Dict[str, Any]) -> "TrainResult":
+    """Fine-tune the LoRA adapter, save it, and return the model and datasets for evaluation.
+
+    Follows the recipe the pieces above were built for: reply-only loss, slots blanked at random
+    each epoch on train and left filled on val, evaluation each epoch, and the adapter saved alone.
+    Under fp16 the LoRA params are kept in fp32 to avoid the PEFT "unscale FP16 gradients" error.
     """
-    raise NotImplementedError("TODO (Andrea): see the steps in this docstring")
+    import gc
+    import time
+
+    import torch
+    from peft import get_peft_model
+    from transformers import Trainer, TrainingArguments, set_seed
+
+    from argubot.io import read_jsonl
+
+    # Free GPU memory left by a previous (e.g. failed) run in the same kernel, so repeated
+    # attempts do not pile up. A kernel restart is still the surest full reset.
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    set_seed(cfg["seed"])
+    t = cfg["training"]
+    paths = cfg["paths"]
+    use_fp16 = bool(t["fp16"]) and torch.cuda.is_available()   # a T4 has no bf16
+    dtype = torch.float16 if use_fp16 else torch.float32
+
+    # 1. Base model + tokenizer, falling back if the configured model will not load.
+    model_name = cfg["generator"]["base_model"]
+    try:
+        tokenizer, model = _load_base(model_name, dtype)
+    except Exception as e:  # noqa: BLE001 - report and fall back rather than crash the run
+        print(f"Could not load {model_name!r}: {type(e).__name__}: {e}")
+        model_name = cfg["generator"]["fallback_model"]
+        print(f"Falling back to {model_name!r} -- tell the group.")
+        tokenizer, model = _load_base(model_name, dtype)
+
+    # GPT-2 names its attention projection c_attn; all-linear is for Qwen3.5.
+    if getattr(model.config, "model_type", "") == "gpt2":
+        cfg = {**cfg, "lora": {**cfg["lora"], "target_modules": ["c_attn"]}}
+        print("GPT-2 detected: using target_modules=['c_attn'].")
+
+    # 2. LoRA. Keep trainable params in fp32 so fp16 training does not hit the unscale error.
+    model = get_peft_model(model, build_lora_config(cfg))
+    if use_fp16:
+        for p in model.parameters():
+            if p.requires_grad:
+                p.data = p.data.float()
+    model.print_trainable_parameters()
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    total = sum(p.numel() for p in model.parameters())
+
+    # Memory: gradient checkpointing trades a little compute for a large drop in activation
+    # memory, which a 24 GB card needs at seq_len 1024 (especially a shared one). use_cache is
+    # incompatible with it, and a LoRA (frozen base) needs inputs to require grad for it to work.
+    model.config.use_cache = False
+    if hasattr(model, "gradient_checkpointing_enable"):
+        try:
+            model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+        except TypeError:
+            model.gradient_checkpointing_enable()
+    if hasattr(model, "enable_input_require_grads"):
+        model.enable_input_require_grads()
+
+    # 3. Datasets. Train blanks slots at random each epoch; val keeps every slot filled.
+    train_examples = list(read_jsonl(paths["train_examples"]))
+    if t.get("max_train_examples"):
+        train_examples = train_examples[: t["max_train_examples"]]
+    val_examples = list(read_jsonl(paths["val_examples"]))
+    train_ds = ReplyOnlyDataset(train_examples, tokenizer, cfg, train=True, seed=cfg["seed"])
+    val_ds = ReplyOnlyDataset(val_examples, tokenizer, cfg, train=False, seed=cfg["seed"])
+
+    # 4. Trainer: eval each epoch, gradient accumulation and warmup from the config.
+    # Keep only the kwargs this transformers version actually accepts. Field names drift between
+    # releases (e.g. evaluation_strategy -> eval_strategy, and some are dropped entirely), so pass
+    # what is supported and warn about the rest instead of crashing.
+    desired = dict(
+        output_dir=paths["adapter_dir"],
+        per_device_train_batch_size=t["per_device_batch_size"],
+        per_device_eval_batch_size=t["per_device_batch_size"],
+        gradient_accumulation_steps=t["grad_accum_steps"],
+        learning_rate=float(t["learning_rate"]),
+        num_train_epochs=t["num_epochs"],
+        warmup_ratio=t["warmup_ratio"],
+        fp16=use_fp16,
+        logging_steps=10,
+        save_strategy="no",           # the adapter is saved by hand at the end, not as checkpoints
+        report_to="none",
+        remove_unused_columns=False,  # our dataset yields dicts the collator consumes as-is
+        label_names=["labels"],
+        eval_strategy="epoch",        # evaluate once per epoch
+        seed=cfg["seed"],
+    )
+    valid = _training_argument_names(TrainingArguments)
+    if "eval_strategy" not in valid and "evaluation_strategy" in valid:
+        desired["evaluation_strategy"] = desired.pop("eval_strategy")  # pre-4.46 name
+    accepted = {k: v for k, v in desired.items() if k in valid}
+    dropped = sorted(set(desired) - set(accepted))
+    if dropped:
+        import transformers
+
+        print(f"Note: transformers {transformers.__version__} does not accept {dropped}; dropped them.")
+    args = TrainingArguments(**accepted)
+
+    trainer = Trainer(
+        model=model,
+        args=args,
+        train_dataset=train_ds,
+        eval_dataset=val_ds,
+        data_collator=ReplyOnlyCollator(tokenizer.pad_token_id),
+    )
+
+    start = time.time()
+    trainer.train()
+    train_seconds = time.time() - start
+    model.config.use_cache = True  # re-enable for fast generation after training
+
+    # 5. Save the adapter only (PEFT writes adapter_config.json + the LoRA weights).
+    adapter_dir = paths["adapter_dir"]
+    model.save_pretrained(adapter_dir)
+    tokenizer.save_pretrained(adapter_dir)
+
+    device = str(getattr(model, "device", "cpu"))
+    print(f"\nRECORD FOR REPORT -> trainable: {trainable:,} / {total:,} = {100 * trainable / total:.3f}%")
+    print(f"RECORD FOR REPORT -> train time: {train_seconds:.1f}s on {device}")
+    print(f"adapter saved to {adapter_dir}")
+
+    return TrainResult(
+        model=model,
+        tokenizer=tokenizer,
+        train_dataset=train_ds,
+        val_dataset=val_ds,
+        trainable_params=trainable,
+        total_params=total,
+        train_seconds=train_seconds,
+        model_name=model_name,
+        adapter_dir=adapter_dir,
+        device=device,
+    )

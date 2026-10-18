@@ -7,22 +7,71 @@ the real retriever, exactly as the pipeline does at inference time, then store:
     {"history": [...], "claims": [...], "passages": [...], "response": "..."}
 Training on slots that look different from the inference-time slots would hurt systems C1 to D.
 Output: cfg["paths"]["train_examples"] and cfg["paths"]["val_examples"].
+The test split is copied untouched to cfg["paths"]["test_dialogues"].
+
+Needs the passages file from scripts/build_indexes.py. Without it, try the smoke test:
+    python scripts/build_training_data.py --dummy --limit 50
+which uses the toy passages and writes next to the real outputs only if you drop --dummy.
 """
 import argparse
+import time
+from pathlib import Path
 
 from argubot.config import load_config
+from argubot.data.training_data import build_examples
+from argubot.io import read_jsonl, write_jsonl
+from argubot.retrieval.bm25 import BM25Retriever
+from argubot.retrieval.dummy import DummyRetriever
+from argubot.schemas import Passage
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="configs/config.yaml")
+    ap.add_argument("--passages", default=None, help="passages JSONL (default: cfg paths.passages)")
+    ap.add_argument("--limit", type=int, default=None, help="only the first N dialogues, for a quick check")
+    ap.add_argument("--dummy", action="store_true", help="toy passages, writes to outputs/dummy/ not data/processed/")
     args = ap.parse_args()
     cfg = load_config(args.config)
 
-    # TODO (Tricia, with Diya's retriever): read cfg["paths"]["cmv_chains"], keep split in
-    # {"train", "val"}, replay each chain, and write the two example files with write_jsonl.
-    # The test split goes to cfg["paths"]["test_dialogues"] untouched, with user turns only needed.
-    raise NotImplementedError("TODO (Tricia): see the docstring")
+    if args.dummy:
+        passages_path = "data/toy/toy_passages.jsonl"
+        out_dir = Path(cfg["paths"]["output_dir"]) / "dummy"
+        train_out, val_out = out_dir / "train_examples.jsonl", out_dir / "val_examples.jsonl"
+        test_out = out_dir / "test_dialogues.jsonl"
+    else:
+        passages_path = args.passages or cfg["paths"]["passages"]
+        train_out, val_out = cfg["paths"]["train_examples"], cfg["paths"]["val_examples"]
+        test_out = cfg["paths"]["test_dialogues"]
+
+    if not Path(passages_path).exists():
+        raise SystemExit(
+            f"No passages file at {passages_path}. Diya's scripts/build_indexes.py writes it "
+            "(args.me needs a manual download). To check the wiring now, add --dummy."
+        )
+    if cfg["retrieval"]["method"] != "bm25" and not args.dummy:
+        raise SystemExit("Dense retrieval is not built yet. Set retrieval.method to bm25 in the config.")
+
+    passages = [Passage.from_dict(d) for d in read_jsonl(passages_path)]
+    retriever = DummyRetriever(passages) if args.dummy else BM25Retriever(passages)
+    print(f"{len(passages)} passages from {passages_path}")
+
+    dialogues = list(read_jsonl(cfg["paths"]["cmv_chains"]))
+    if args.limit:
+        dialogues = dialogues[: args.limit]
+    start = time.time()
+
+    def progress(done: int) -> None:
+        if done % 200 == 0:
+            rate = done / (time.time() - start)
+            print(f"  {done}/{len(dialogues)} dialogues, {rate:.1f}/s, about {(len(dialogues) - done) / rate / 60:.0f} min left")
+
+    examples = build_examples(dialogues, retriever, cfg, on_dialogue=progress)
+    print(f"train: {write_jsonl(str(train_out), examples['train'])} examples -> {train_out}")
+    print(f"val:   {write_jsonl(str(val_out), examples['val'])} examples -> {val_out}")
+
+    test = [d for d in dialogues if d["split"] == "test"]
+    print(f"test:  {write_jsonl(str(test_out), test)} dialogues -> {test_out}")
 
 
 if __name__ == "__main__":

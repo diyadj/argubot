@@ -23,7 +23,8 @@ data:
   split_ratios: [0.8, 0.1, 0.1]   # train / validation / test, split by thread
   min_turns: 3
   max_turns: 6
-  bot_reply_max_tokens: 150
+  bot_reply_max_tokens: 150       # counted in whitespace words, cut at a sentence boundary
+  user_turn_max_words: 200        # the poster's long opening post is cut to this, keeps prompts inside max_seq_len
   passage_max_words: 120          # keeps every passage inside the NLI model's 512 token limit
 
 claims:

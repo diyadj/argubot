@@ -13,6 +13,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from argubot.text import split_sentences, truncate_words
 
 _URL = re.compile(r"https?://\S+|www\.\S+")
+_LINK_LABEL = re.compile(r"\[([^\]]+)\]\((?:\s*\))?")
+_MARKUP = re.compile(r"[*^]|~~")  # bold/italic asterisks, superscript carets, strikethrough
 _REMOVED = {"", "[deleted]", "[removed]"}
 _AUTOMATED_USERS = {"deltabot", "automoderator"}
 
@@ -70,8 +72,14 @@ MIN_BOT_WORDS = 10  # a bot turn shorter than this ("lol", "this.") teaches noth
 
 
 def prepare_text(text: str) -> str:
-    """clean_comment plus HTML entities. The corpus stores "&gt;" for quotes and "&amp;" for "&"."""
-    return html.unescape(clean_comment(text))
+    """clean_comment plus HTML entities and Reddit markdown.
+
+    The corpus stores "&gt;" for quotes and "&amp;" for "&". clean_comment strips the URL inside
+    "[label](url)" and leaves "[label](", so the label is kept and the brackets removed here.
+    """
+    text = html.unescape(clean_comment(text))
+    text = _LINK_LABEL.sub(r"\1", text)
+    return " ".join(_MARKUP.sub("", text).split())
 
 
 def cap_words(text: str, max_words: int, *, whole_sentences: bool) -> Optional[str]:

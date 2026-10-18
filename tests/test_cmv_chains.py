@@ -1,4 +1,4 @@
-from argubot.data.cmv import cap_words, chains_for_thread, extract_persona_chains
+from argubot.data.cmv import prepare_text, cap_words, chains_for_thread, extract_persona_chains
 
 LONG = "This is a reasonably long reply that makes a clear point about the topic at hand."
 
@@ -89,3 +89,8 @@ def test_extract_splits_by_thread_and_keeps_dialogue_ids_unique():
     assert len({r["dialogue_id"] for r in rows}) == 20
     assert {r["split"] for r in rows} <= {"train", "val", "test"}
     assert all(set(r) == {"dialogue_id", "split", "turns"} for r in rows)
+
+
+def test_markdown_links_and_emphasis_are_cleaned():
+    raw = "Have you seen the [Purple America](https://x.org/map) map? It is *really* big ^(small) ~~no~~."
+    assert prepare_text(raw) == "Have you seen the Purple America map? It is really big (small) no."

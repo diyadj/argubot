@@ -14,7 +14,17 @@ from typing import Callable, List, Optional, Tuple
 from argubot.text import jaccard, split_sentences, words
 
 MIN_WORDS = 4
+MAX_CLAIM_WORDS = 40  # longer than this is a run-on, which makes a poor claim for the NLI check
 _HEDGE = re.compile(r"\b(maybe|perhaps|might|possibly|could be|not sure)\b", re.IGNORECASE)
+
+# A concession gives ground before the speaker's real point: "Uniforms can be cheaper, but ...".
+# The part before "but" is not what the bot is arguing, so only the part after it is stored.
+_BUT = re.compile(r",?\s+but,?\s+", re.IGNORECASE)
+_CONCEDES = re.compile(
+    r"^(?:sure|granted|true|admittedly|of course|yes|okay|ok|fair enough)\b|\b(?:can|may|could|might)\b(?!')",
+    re.IGNORECASE,
+)
+_BECAUSE = re.compile(r",?\s+because\b", re.IGNORECASE)
 
 _nlp = None
 _nlp_failed = False
@@ -39,31 +49,62 @@ def _is_candidate(sentence: str) -> bool:
         return False
     if s.endswith("?"):
         return False
+    if s.endswith("!") and len(s.split()) < 10:  # "OK, now we're getting somewhere!"
+        return False
     if s.startswith((">", '"', "“")):  # quoting the opponent, not the bot's own claim
         return False
     return not _HEDGE.search(s)
 
 
-def extract_claims(text: str, use_spacy: bool = True) -> List[str]:
-    """Return the declarative, un-hedged sentences in a reply.
+def _end(text: str) -> str:
+    text = text.strip()
+    text = text[0].upper() + text[1:] if text else text
+    return text if text.endswith((".", "!", "?")) else text + "."
 
-    TODO (Tricia): check this on 50 real CMV replies and tune. Things to look at:
-      - "I think X" is still a claim in a debate, so hedges like that should stay in.
-      - Concessions ("uniforms can be cheaper, but ...") should not be stored as claims.
-      - Very long sentences may need to be split on "because" or semicolons.
+
+def _refine(sentence: str) -> List[str]:
+    """Turn one sentence into the claim(s) it makes: drop a conceded half, split on ";", cut run-ons."""
+    s = sentence.strip()
+    m = _BUT.search(s)
+    if m and _CONCEDES.search(s[: m.start()]) and len(s[m.end():].split()) >= MIN_WORDS:
+        s = s[m.end():]
+    out = []
+    for part in (p for p in s.split(";") if p.strip()):
+        part = _end(part)
+        if len(part.split()) > MAX_CLAIM_WORDS:
+            b = _BECAUSE.search(part)
+            part = _end(part[: b.start()]) if b else part
+        if len(part.split()) <= MAX_CLAIM_WORDS:
+            out.append(part)
+    return out
+
+
+def extract_claims(text: str, use_spacy: bool = True) -> List[str]:
+    """Return the declarative, un-hedged claims in a reply.
+
+    Tuned on 50 real CMV bot replies. What the filters do, and why:
+      - questions, short exclamations, quotes and hedged sentences ("maybe", "might") are skipped.
+        "I think X" is kept: in a debate it is still the speaker's position.
+      - a concession ("uniforms can be cheaper, but ...") keeps only the part after "but".
+      - a sentence with ";" becomes one claim per clause, and a sentence over MAX_CLAIM_WORDS
+        is cut before "because" or dropped, since a run-on is a poor claim to check for contradictions.
     """
     nlp = _load_spacy() if use_spacy else None
     if nlp is None:
-        return [s for s in split_sentences(text) if _is_candidate(s)]
+        sentences = split_sentences(text)
+        ok = lambda _s: True
+    else:
+        sentences = [sent for sent in nlp(text).sents]
+        ok = lambda sent: any(t.dep_ in ("nsubj", "nsubjpass", "expl") for t in sent) and any(
+            t.pos_ in ("VERB", "AUX") for t in sent
+        )
 
     claims: List[str] = []
-    for sent in nlp(text).sents:
-        if not _is_candidate(sent.text):
+    for sent in sentences:
+        raw = sent if isinstance(sent, str) else sent.text
+        if not ok(sent):
             continue
-        has_subject = any(t.dep_ in ("nsubj", "nsubjpass", "expl") for t in sent)
-        has_verb = any(t.pos_ in ("VERB", "AUX") for t in sent)
-        if has_subject and has_verb:
-            claims.append(sent.text.strip())
+        claims.extend(c for c in _refine(raw) if _is_candidate(c))
     return claims
 
 

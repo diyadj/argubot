@@ -54,6 +54,8 @@ def main() -> None:
         start = time.time()
         BM25Retriever(argsme, index_dir=cfg["paths"]["index_dir"])
         print(f"BM25 index for args.me saved to {cfg['paths']['index_dir']} in {time.time() - start:.0f}s")
+        BM25Retriever(ibm, index_dir=f"{cfg['paths']['index_dir']}/ibm_argq")
+        print(f"BM25 index for IBM-ArgQ (the backup) saved to {cfg['paths']['index_dir']}/ibm_argq")
 
     if args.dense:
         from argubot.retrieval.dense import DenseRetriever

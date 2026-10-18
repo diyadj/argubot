@@ -58,9 +58,12 @@ Run these from the repo root. This is also the draft of the report's "how to run
 | Contradiction rate, distinct-2, bootstrap, kappa, rating sheets | Done and tested |
 | Chat demo page (`scripts/serve_demo.py`, `web/index.html`) | Works with `--dummy`, real mode untested until the adapter exists |
 | Thread split, comment cleaning, passage splitting | Done and tested |
-| CMV persona extraction | Done and tested (9,640 dialogues from 3,051 threads) |
+| CMV persona extraction | Done and tested (9,642 dialogues from 2,734 of 3,051 threads) |
 | args.me and IBM-ArgQ loading, passage files, fast BM25 index | Done and tested (1.2M args.me passages, 30k IBM-ArgQ) |
-| Dense retrieval (MiniLM + FAISS) | TODO (Diya) |
+| Dense retrieval (MiniLM + FAISS) | Code done and tested; full args.me index needs a GPU (`build_indexes.py --dense`) |
+| IBM-ArgQ backup index and fallback | Built and tested, switched off (`retrieval.use_backup: false`), see `docs/DATA_NOTES.md` |
+| Retrieval-stance test on the 71 motions | Done: `scripts/eval_retrieval_stance.py` (BM25 and dense), results in `docs/DATA_NOTES.md` |
+| Stance alignment | Done as a tested utility, not wired into the pipeline |
 | Training run and the notebooks | TODO (Andrea), see `docs/NOTEBOOK_ADAPTATION.md` |
 | Training data builder | Done and tested, needs `build_indexes.py` first |
 | Real download links | Done: `download_data.py --all` |

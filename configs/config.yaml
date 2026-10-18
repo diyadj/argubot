@@ -38,6 +38,8 @@ retrieval:
   top_k_keep: 3
   dense_model: sentence-transformers/all-MiniLM-L6-v2
   backup_index: ibm_argq          # used when args.me results are weak
+  use_backup: false               # OFF: on weak queries IBM-ArgQ returned worse evidence than args.me (docs/DATA_NOTES.md)
+  backup_min_score: 131.4         # BM25 only: 10th percentile of best args.me scores (scripts/calibrate_backup.py)
 
 prompt:
   max_history_turns: 6

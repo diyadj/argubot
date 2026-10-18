@@ -94,3 +94,7 @@ def test_extract_splits_by_thread_and_keeps_dialogue_ids_unique():
 def test_markdown_links_and_emphasis_are_cleaned():
     raw = "Have you seen the [Purple America](https://x.org/map) map? It is *really* big ^(small) ~~no~~."
     assert prepare_text(raw) == "Have you seen the Purple America map? It is really big (small) no."
+
+
+def test_double_encoded_entities_are_decoded():
+    assert prepare_text("&amp;#8710; Fish &amp;amp; chips &amp;lt;3") == "∆ Fish & chips <3"

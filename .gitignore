@@ -11,6 +11,10 @@ data/processed/*
 data/indexes/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
+# Small enough to share through git: the scripted test debates and the gzipped training examples.
+!data/processed/test_dialogues.jsonl
+!data/processed/train_examples.jsonl.gz
+!data/processed/val_examples.jsonl.gz
 !data/indexes/.gitkeep
 outputs/*
 !outputs/.gitkeep

@@ -77,7 +77,12 @@ def prepare_text(text: str) -> str:
     The corpus stores "&gt;" for quotes and "&amp;" for "&". clean_comment strips the URL inside
     "[label](url)" and leaves "[label](", so the label is kept and the brackets removed here.
     """
-    text = html.unescape(clean_comment(text))
+    text = clean_comment(text)
+    for _ in range(3):  # some comments are encoded twice ("&amp;#8710;" for the delta sign)
+        decoded = html.unescape(text)
+        if decoded == text:
+            break
+        text = decoded
     text = _LINK_LABEL.sub(r"\1", text)
     return " ".join(_MARKUP.sub("", text).split())
 

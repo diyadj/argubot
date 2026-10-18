@@ -80,3 +80,16 @@ def test_only_train_and_val_become_examples():
     dialogues = [dict(DIALOGUE, split=s) for s in ("train", "val", "test")]
     out = build_examples(dialogues, RecordingRetriever(), CFG)
     assert set(out) == {"train", "val"} and len(out["train"]) == 2 and len(out["val"]) == 2
+
+
+def _make_retriever():
+    return RecordingRetriever()
+
+
+def test_parallel_build_matches_the_single_process_build():
+    dialogues = [dict(DIALOGUE, dialogue_id=f"d{i}", split="train" if i % 3 else "val") for i in range(12)]
+    same = build_examples(dialogues, RecordingRetriever(), CFG)
+    from argubot.data.training_data import build_examples_parallel
+
+    par = build_examples_parallel(dialogues, _make_retriever, CFG, workers=2, chunksize=2)
+    assert par == same

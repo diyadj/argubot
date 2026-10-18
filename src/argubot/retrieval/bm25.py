@@ -100,11 +100,13 @@ class BM25Retriever:
 
     def scores(self, query: str) -> np.ndarray:
         out = np.zeros(len(self.passages), dtype=np.float32)
-        for term in words(query):  # a repeated query word counts again, as in rank_bm25
+        # A repeated query word counts again, as in rank_bm25, so walk each distinct word once and
+        # multiply. Queries repeat words like "the" dozens of times and those have the longest lists.
+        for term, count in Counter(words(query)).items():
             t = self._vocab.get(term)
             if t is not None:
                 lo, hi = self._offsets[t], self._offsets[t + 1]
-                out[self._docs[lo:hi]] += self._weights[lo:hi]
+                out[self._docs[lo:hi]] += self._weights[lo:hi] * count if count > 1 else self._weights[lo:hi]
         return out
 
     def retrieve(self, query: str, k: int = 10) -> List[Passage]:

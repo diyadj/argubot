@@ -46,13 +46,35 @@ Limits (say these in the report): the tuning was done by eye on one sample, not 
 - Premises are packed into passages of at most 120 words on sentence boundaries (so they fit the NLI model); text with no sentence breaks is cut at 120 words, and passages under 8 words are dropped. 345,977 of the 382,545 arguments survive.
 - args.me and IBM-ArgQ are kept in separate passage files, so the short IBM arguments cannot crowd args.me out of the main index.
 - BM25 is an inverted index with the same Okapi scoring as `rank_bm25` (a test compares them). `rank_bm25` took about 19 s per query at this size, an estimated 100 hours for the training set; the index takes about 50 ms, and the saved index loads in under a second.
-- A dense retriever (MiniLM + FAISS) is implemented and tested, and `retrieval.method: dense` switches to it. Its full index has not been built: encoding 1.2M passages needs a GPU (about 25 passages per second measured on CPU, roughly 13 hours).
+- A dense retriever (MiniLM + FAISS) is implemented and tested, and `retrieval.method: dense` switches to it. The full args.me index has not been built: encoding 1.2M passages needs a GPU (about 25 passages per second measured on CPU, roughly 13 hours). The 30k short IBM-ArgQ arguments took 72 seconds on the same CPU, which is what the stance test above uses.
 
 ## IBM-ArgQ backup index (`src/argubot/retrieval/fallback.py`)
 
 Built and wired in, but **switched off** (`retrieval.use_backup: false`). The config says the backup is used "when args.me results are weak", so `FallbackRetriever` uses it when the best args.me BM25 score is below `backup_min_score` (131.4, the 10th percentile over 500 real training queries, from `scripts/calibrate_backup.py`). Only the args.me score decides, because BM25 scores from two corpora cannot be compared.
 
 Why it is off: the weak queries are mostly short conversational turns ("Can you elaborate a bit more on which device you prefer?", about 52 words against 142 on average), which score low because they carry little content, not because args.me lacks the topic. In the 7 weak queries I read, the IBM backup returned worse evidence than args.me every time or nearly (nuclear disarmament for a question about "nice guys", cosmetic surgery for a phone question), since IBM-ArgQ covers only 71 motions. Turning it on would also change the evidence slot, so the training examples would need rebuilding with it.
+
+## Retrieval-stance test on the 71 motions (`scripts/eval_retrieval_stance.py`)
+
+Question: does retrieval hand back passages on the query's side, or only on its topic? Run on IBM-ArgQ, where every argument has a motion and a PRO/CON stance towards it, so the answers are known. The metric definitions are ours (the proposal's wording was not available); they are in `src/argubot/eval/retrieval_stance.py` and easy to change.
+
+- **Motion as query** (71 motions, top 10): BM25 finds the motion's own arguments 99% of the time (dense: 100%). The hits lean PRO (BM25 66%, dense 73%, where 50% is balanced), because PRO arguments tend to restate the motion.
+- **Argument as query** (each argument is a query, itself removed, same 3,000 queries for both):
+
+| Retriever | Right motion in top 10 | Same stance as the query | Chance | Gap over chance (95% CI) |
+| --- | --- | --- | --- | --- |
+| BM25 | 0.749 | 0.748 | 0.500 | +0.248 (+0.239 to +0.257) |
+| Dense (MiniLM) | 0.921 | 0.772 | 0.500 | +0.273 (+0.264 to +0.281) |
+
+BM25 on all 30,497 queries gives the same picture (+0.247). So both retrievers pick up the side well above chance, and dense is clearly better at finding the right topic (0.92 against 0.75) but only modestly better at the side. I had expected retrieval to be close to stance-blind; it is not, on this data.
+
+Limits: IBM arguments are short, crowd-written and all about the same 71 motions, and same-side arguments share phrasing ("should be banned"). This says nothing certain about args.me or CMV. I did not check for near-duplicate arguments between query and results. The CIs treat queries as independent. Dense here is built in memory over the 30k short passages, not the full args.me index.
+
+## Stance alignment (`src/argubot/retrieval/stance_alignment.py`)
+
+An args.me label is PRO or CON towards its own conclusion, and conclusions are worded freely, so "PRO" on "The death penalty should be abolished" is the opposite of "PRO" on "...should be allowed". `align_stance` restates a label towards one target motion using RoBERTa-MNLI in both directions: entailment keeps the label, contradiction flips it, otherwise None. Checked on real args.me conclusions against "The death penalty should be allowed": "should be abolished" and "Should Be Illegal" flip to CON, "should exist" and "should remain active" keep PRO. A bare topic title ("Death Penalty") has no polarity, and NLI wrongly called it entailed (0.94), so titles now return None.
+
+Not wired into the pipeline: CMV dialogues have no explicit motion, and the stance filter compares passage text with the bot's claims and never reads stance labels. This is our reading of the proposal's wording, not a verified definition.
 
 ## Training examples (`scripts/build_training_data.py`)
 

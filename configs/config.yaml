@@ -59,8 +59,8 @@ lora:
 
 training:
   max_seq_len: 1024
-  per_device_batch_size: 4
-  grad_accum_steps: 4
+  per_device_batch_size: 1        # a shared 24 GB card OOMs at 4; raise if you have the card to yourself
+  grad_accum_steps: 16            # effective batch = per_device_batch_size x this = 16
   learning_rate: 2.0e-4
   num_epochs: 3
   warmup_ratio: 0.03

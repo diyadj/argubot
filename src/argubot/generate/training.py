@@ -173,6 +173,7 @@ def train(cfg: Dict[str, Any]) -> "TrainResult":
     each epoch on train and left filled on val, evaluation each epoch, and the adapter saved alone.
     Under fp16 the LoRA params are kept in fp32 to avoid the PEFT "unscale FP16 gradients" error.
     """
+    import gc
     import time
 
     import torch
@@ -180,6 +181,12 @@ def train(cfg: Dict[str, Any]) -> "TrainResult":
     from transformers import Trainer, TrainingArguments, set_seed
 
     from argubot.io import read_jsonl
+
+    # Free GPU memory left by a previous (e.g. failed) run in the same kernel, so repeated
+    # attempts do not pile up. A kernel restart is still the surest full reset.
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
     set_seed(cfg["seed"])
     t = cfg["training"]

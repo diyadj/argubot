@@ -149,6 +149,23 @@ def _load_base(model_name: str, dtype):
     return tok, model
 
 
+def _training_argument_names(training_arguments_cls) -> set:
+    """The kwargs a given transformers TrainingArguments accepts; the field set varies by version."""
+    import dataclasses
+    import inspect
+
+    names: set = set()
+    try:
+        names |= {f.name for f in dataclasses.fields(training_arguments_cls)}
+    except TypeError:
+        pass
+    try:
+        names |= set(inspect.signature(training_arguments_cls.__init__).parameters) - {"self"}
+    except (TypeError, ValueError):
+        pass
+    return names
+
+
 def train(cfg: Dict[str, Any]) -> "TrainResult":
     """Fine-tune the LoRA adapter, save it, and return the model and datasets for evaluation.
 
@@ -204,7 +221,10 @@ def train(cfg: Dict[str, Any]) -> "TrainResult":
     val_ds = ReplyOnlyDataset(val_examples, tokenizer, cfg, train=False, seed=cfg["seed"])
 
     # 4. Trainer: eval each epoch, gradient accumulation and warmup from the config.
-    ta_kwargs = dict(
+    # Keep only the kwargs this transformers version actually accepts. Field names drift between
+    # releases (e.g. evaluation_strategy -> eval_strategy, and some are dropped entirely), so pass
+    # what is supported and warn about the rest instead of crashing.
+    desired = dict(
         output_dir=paths["adapter_dir"],
         per_device_train_batch_size=t["per_device_batch_size"],
         per_device_eval_batch_size=t["per_device_batch_size"],
@@ -218,12 +238,19 @@ def train(cfg: Dict[str, Any]) -> "TrainResult":
         report_to="none",
         remove_unused_columns=False,  # our dataset yields dicts the collator consumes as-is
         label_names=["labels"],
+        eval_strategy="epoch",        # evaluate once per epoch
         seed=cfg["seed"],
     )
-    try:  # transformers renamed evaluation_strategy -> eval_strategy in 4.46
-        args = TrainingArguments(eval_strategy="epoch", **ta_kwargs)
-    except TypeError:
-        args = TrainingArguments(evaluation_strategy="epoch", **ta_kwargs)
+    valid = _training_argument_names(TrainingArguments)
+    if "eval_strategy" not in valid and "evaluation_strategy" in valid:
+        desired["evaluation_strategy"] = desired.pop("eval_strategy")  # pre-4.46 name
+    accepted = {k: v for k, v in desired.items() if k in valid}
+    dropped = sorted(set(desired) - set(accepted))
+    if dropped:
+        import transformers
+
+        print(f"Note: transformers {transformers.__version__} does not accept {dropped}; dropped them.")
+    args = TrainingArguments(**accepted)
 
     trainer = Trainer(
         model=model,

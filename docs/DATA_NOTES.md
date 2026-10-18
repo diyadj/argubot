@@ -1,0 +1,74 @@
+# Data and claim tracker: notes for the report
+
+Owner: Tricia (CMV chains, claim tracker, training examples, test debates). Retrieval data (args.me, IBM-ArgQ, indexes) is Diya's lane but was built here, so it is covered too. Every number below comes from a real run of the scripts in this repo.
+
+## Datasets
+
+| Dataset | Used for | Size we use |
+| --- | --- | --- |
+| CMV Winning Arguments (ConvoKit `winning-args-corpus`) | Dialogues for training and testing | 3,051 threads, 293,297 comments |
+| args.me v1.0-cleaned (Zenodo 4139439) | Main retrieval index | 382,545 arguments, 1,198,728 passages |
+| IBM-ArgQ-Rank-30k (Hugging Face `ibm-research/argument_quality_ranking_30k`) | Backup index, 71-motion stance test | 30,497 arguments, 71 motions |
+
+IBM's own download page no longer exists (404), so the script fetches the same files from IBM's Hugging Face copy. `python scripts/download_data.py --all` downloads all three.
+
+## CMV persona dialogues (`src/argubot/data/cmv.py`)
+
+A persona is a non-poster who replies to the poster at least twice in one thread. Reddit threads are trees, so a dialogue is the longest path that alternates poster, persona, poster, persona, starting at the opening post. The persona's comments are the bot turns and the poster's are the user turns.
+
+- Dropped: deleted and removed comments, moderators (`distinguished == "moderator"`), DeltaBot and AutoModerator, quoted lines, URLs, Reddit markup, and bot replies under 10 words.
+- Length: 4 to 6 turns. The proposal says 3 to 6, but two persona replies need at least four turns, so 3 never occurs.
+- Bot replies are cut to 150 words at a sentence boundary (words stand in for tokens). If the first sentence alone is longer, that dialogue is dropped. The poster's opening post is cut to 200 words.
+- Result: **9,642 dialogues from 2,734 of the 3,051 threads** (4 turns: 4,178; 5 turns: 2,172; 6 turns: 3,292). Bot replies average 89 words.
+- Split by thread, 80/10/10, seed 42, assigned before any dialogue is written, so no thread crosses a split (checked: 0 threads in more than one split).
+
+| Split | Dialogues | Threads | Bot turns |
+| --- | --- | --- | --- |
+| train | 7,690 | 2,192 | 18,014 |
+| val | 982 | 267 | 2,282 |
+| test | 970 | 275 | 2,280 |
+
+Corpus quirks worth knowing: the opening post and about 400 other comments have no timestamp, so order comes from `reply_to`, never from sorting by time. Some comments are HTML-encoded twice (`&amp;#8710;` for the delta sign), which the first version decoded only once; 1.4% of turns were affected before the fix.
+
+## Claim tracker (`src/argubot/claims/tracker.py`)
+
+Keeps the 5 most recent distinct declarative sentences from the bot's own replies, de-duplicated at word-set Jaccard 0.8. Tuned by reading its output on 50 real CMV bot replies:
+
+- Questions, quotes, hedged sentences ("maybe", "might") and short exclamations are skipped. "I think X" is kept because it is still the speaker's position.
+- A concession ("X can be cheaper, but Y") stores only Y.
+- A sentence with a semicolon becomes one claim per clause. A sentence over 40 words is cut before "because", or dropped.
+- Average claims per reply fell from 4.5 to 3.8 after tuning.
+
+Limits (say these in the report): the tuning was done by eye on one sample, not against labelled claims. Claims that depend on the previous sentence ("That doesn't sound like a utopia to me") are still stored and carry little meaning on their own. If the NLI contradiction scores look noisy, look here first.
+
+## Retrieval data (`src/argubot/data/argsme.py`, `src/argubot/retrieval/`)
+
+- Premises are packed into passages of at most 120 words on sentence boundaries (so they fit the NLI model); text with no sentence breaks is cut at 120 words, and passages under 8 words are dropped. 345,977 of the 382,545 arguments survive.
+- args.me and IBM-ArgQ are kept in separate passage files, so the short IBM arguments cannot crowd args.me out of the main index.
+- BM25 is an inverted index with the same Okapi scoring as `rank_bm25` (a test compares them). `rank_bm25` took about 19 s per query at this size, an estimated 100 hours for the training set; the index takes about 50 ms, and the saved index loads in under a second.
+- A dense retriever (MiniLM + FAISS) is implemented and tested, and `retrieval.method: dense` switches to it. Its full index has not been built: encoding 1.2M passages needs a GPU (about 25 passages per second measured on CPU, roughly 13 hours).
+
+## Training examples (`scripts/build_training_data.py`)
+
+One example per bot turn in a train or val dialogue: 18,014 train and 2,282 val. The slots are produced by replaying each dialogue the way `ArguBotPipeline.step` does at inference: the tracker has heard the persona's earlier replies, the query is the latest user turn plus the claim log, and the top 3 of the top 10 BM25 passages are kept. The stance filter is not replayed (it needs the NLI model).
+
+- 46% of examples have an empty claim log (mostly each dialogue's first bot turn) and 32% have the full 5.
+- Prompt length with real passages (1.35 tokens per word, an estimate): median about 605 words, **33% of examples are over 1,024 tokens and 2.4% over 1,536**. The training limit is `max_seq_len` 1024, so about a third of prompts lose their oldest tokens.
+
+## Known weakness: the evidence is often off-topic
+
+Reading 12 random training examples, by my own judgement about 4 had clearly relevant evidence, 4 were loosely related and 4 were off-topic (for example, a question about a TV show returned an argument about Iranian social media). CMV topics are wider than args.me's debate topics, and BM25 on a long conversational query matches common words. This is a reading of a small sample, not a measurement. It matters for the A versus B comparison: if the evidence is weak, system B may not beat A, and that would be the retrieval, not the idea. Options for the group: use the dense retriever, or leave the evidence slot empty when the top BM25 score is low.
+
+## Scripted test debates (`scripts/make_test_debates.py`)
+
+The test split has 970 dialogues, too many to run five systems on. The script picks **100 debates**: test split only, exactly three user turns (so each system gives three replies to compare), no delta-award turns and no user turn under 5 words, one per thread, seeded shuffle (seed 42). The first 20 are the human-rating subset.
+
+## How to reproduce
+
+```
+python scripts/download_data.py --all
+python scripts/build_cmv_chains.py
+python scripts/build_indexes.py                 # about 4 minutes; add --dense on a GPU
+python scripts/build_training_data.py --workers 4   # about 30 minutes, about 2.5 GB RAM per worker
+python scripts/make_test_debates.py
+```

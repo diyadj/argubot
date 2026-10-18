@@ -58,7 +58,7 @@ Run these from the repo root. This is also the draft of the report's "how to run
 | Contradiction rate, distinct-2, bootstrap, kappa, rating sheets | Done and tested |
 | Chat demo page (`scripts/serve_demo.py`, `web/index.html`) | Works with `--dummy`, real mode untested until the adapter exists |
 | Thread split, comment cleaning, passage splitting | Done and tested |
-| CMV persona extraction | Done and tested (9,640 dialogues from 3,051 threads) |
+| CMV persona extraction | Done and tested (9,642 dialogues from 2,734 of 3,051 threads) |
 | args.me and IBM-ArgQ loading, passage files, fast BM25 index | Done and tested (1.2M args.me passages, 30k IBM-ArgQ) |
 | Dense retrieval (MiniLM + FAISS) | TODO (Diya) |
 | Training run and the notebooks | TODO (Andrea), see `docs/NOTEBOOK_ADAPTATION.md` |

@@ -30,7 +30,7 @@ def is_debatable(dialogue: dict) -> bool:
     user_texts = [t["text"] for t in dialogue["turns"] if t["speaker"] == "user"]
     if len(user_texts) != USER_TURNS:
         return False
-    if any("∆" in t or "delta" in t.lower() for t in user_texts):
+    if any("∆" in t or "Δ" in t or "delta" in t.lower() for t in user_texts):
         return False
     return all(len(t.split()) >= MIN_USER_WORDS for t in user_texts)
 

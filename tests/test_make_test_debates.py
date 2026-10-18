@@ -20,6 +20,7 @@ def test_only_three_user_turn_test_debates_without_deltas_or_one_liners():
     assert not mtd.is_debatable(dialogue("t_0", users=(LONG, LONG)))
     assert not mtd.is_debatable(dialogue("t_0", users=(LONG, "∆ thanks for that explanation", LONG)))
     assert not mtd.is_debatable(dialogue("t_0", users=(LONG, "!Delta", LONG)))
+    assert not mtd.is_debatable(dialogue("t_0", users=(LONG, "Δ you changed my view on this", LONG)))
     assert not mtd.is_debatable(dialogue("t_0", users=(LONG, "lol ok", LONG)))
 
 

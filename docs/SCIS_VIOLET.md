@@ -1,5 +1,9 @@
 # Running ArguBot on the SCIS Origami GPU cluster (violet.scis.dev)
 
+> **Just want to run the smoke-test notebook?** Follow the step-by-step runbook in
+> [RUN_ON_VIOLET.md](RUN_ON_VIOLET.md). This page is the deeper reference (sbatch training,
+> partitions, file transfer).
+
 Use this when Colab's T4 is not enough (fp16 NaNs, out-of-memory, or a long training run).
 Docs: https://violet.scis.dev/docs
 

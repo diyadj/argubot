@@ -104,3 +104,17 @@ def test_ibm_argq_rows_become_passages_with_motion_and_stance(tmp_path):
         ("They cost too much.", "CON", "We should wear uniforms"),
     ]
     assert len({p.source_id for p in out}) == 2
+
+
+def test_read_jsonl_falls_back_to_the_gzipped_copy(tmp_path):
+    import gzip
+
+    from argubot.io import read_jsonl, write_jsonl
+
+    plain = tmp_path / "a.jsonl"
+    write_jsonl(str(plain), [{"x": 1}, {"x": 2}])
+    with open(plain, "rb") as f, gzip.open(str(plain) + ".gz", "wb") as g:
+        g.write(f.read())
+    plain.unlink()  # only a.jsonl.gz is left, as after a git pull
+    assert [r["x"] for r in read_jsonl(str(plain))] == [1, 2]
+    assert [r["x"] for r in read_jsonl(str(plain) + ".gz")] == [1, 2]

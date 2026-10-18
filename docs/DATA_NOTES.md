@@ -63,6 +63,10 @@ Reading 12 random training examples, by my own judgement about 4 had clearly rel
 
 The test split has 970 dialogues, too many to run five systems on. The script picks **100 debates**: test split only, exactly three user turns (so each system gives three replies to compare), no delta-award turns and no user turn under 5 words, one per thread, seeded shuffle (seed 42). The first 20 are the human-rating subset.
 
+## Data files in the repo
+
+`data/processed/` is git-ignored except for three small files: `test_dialogues.jsonl` (the 100 test debates), `train_examples.jsonl.gz` (15 MB) and `val_examples.jsonl.gz` (1.9 MB). After `git pull`, training can start straight away: `read_jsonl` opens `x.jsonl.gz` when only the gzipped copy exists, so the paths in the config work unchanged. The passages (840 MB) and the BM25 index (600 MB) are not committed; `build_indexes.py` rebuilds them in about 4 minutes. If the training examples are rebuilt, gzip the new ones and commit again, since every version stays in the repo history.
+
 ## How to reproduce
 
 ```

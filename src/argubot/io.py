@@ -1,13 +1,18 @@
 """Tiny JSONL helpers so every module reads and writes the same way."""
 from __future__ import annotations
 
+import gzip
 import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator
 
 
 def read_jsonl(path: str) -> Iterator[Dict[str, Any]]:
-    with open(path, "r", encoding="utf-8") as f:
+    """Reads path, or path + ".gz" when only the gzipped copy exists (the committed data files are gzipped)."""
+    if not Path(path).exists() and Path(path + ".gz").exists():
+        path += ".gz"
+    opener = gzip.open if path.endswith(".gz") else open
+    with opener(path, "rt", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if line:

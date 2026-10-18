@@ -21,12 +21,21 @@ def build_retriever(cfg: Dict[str, Any], passages) -> Retriever:
     method = cfg["retrieval"]["method"]
     index_dir = cfg["paths"]["index_dir"]
     if method == "bm25":
-        return BM25Retriever(passages, index_dir=index_dir)
-    if method == "dense":
+        primary: Retriever = BM25Retriever(passages, index_dir=index_dir)
+    elif method == "dense":
         from argubot.retrieval.dense import DenseRetriever
 
-        return DenseRetriever.load(f"{index_dir}/dense", cfg["retrieval"]["dense_model"], passages)
-    raise ValueError(f"retrieval.method must be bm25 or dense, got {method!r}")
+        primary = DenseRetriever.load(f"{index_dir}/dense", cfg["retrieval"]["dense_model"], passages)
+    else:
+        raise ValueError(f"retrieval.method must be bm25 or dense, got {method!r}")
+    if not cfg["retrieval"].get("use_backup", False):
+        return primary
+
+    from argubot.retrieval.fallback import FallbackRetriever
+
+    backup_passages = [Passage.from_dict(d) for d in read_jsonl(cfg["paths"]["passages_backup"])]
+    backup = BM25Retriever(backup_passages, index_dir=f"{index_dir}/ibm_argq")
+    return FallbackRetriever(primary, backup, cfg["retrieval"]["backup_min_score"])
 
 
 def load_components(cfg: Dict[str, Any], dummy: bool = False) -> Tuple[Generator, Retriever, NLIScorer]:

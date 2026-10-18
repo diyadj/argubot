@@ -48,6 +48,12 @@ Limits (say these in the report): the tuning was done by eye on one sample, not 
 - BM25 is an inverted index with the same Okapi scoring as `rank_bm25` (a test compares them). `rank_bm25` took about 19 s per query at this size, an estimated 100 hours for the training set; the index takes about 50 ms, and the saved index loads in under a second.
 - A dense retriever (MiniLM + FAISS) is implemented and tested, and `retrieval.method: dense` switches to it. Its full index has not been built: encoding 1.2M passages needs a GPU (about 25 passages per second measured on CPU, roughly 13 hours).
 
+## IBM-ArgQ backup index (`src/argubot/retrieval/fallback.py`)
+
+Built and wired in, but **switched off** (`retrieval.use_backup: false`). The config says the backup is used "when args.me results are weak", so `FallbackRetriever` uses it when the best args.me BM25 score is below `backup_min_score` (131.4, the 10th percentile over 500 real training queries, from `scripts/calibrate_backup.py`). Only the args.me score decides, because BM25 scores from two corpora cannot be compared.
+
+Why it is off: the weak queries are mostly short conversational turns ("Can you elaborate a bit more on which device you prefer?", about 52 words against 142 on average), which score low because they carry little content, not because args.me lacks the topic. In the 7 weak queries I read, the IBM backup returned worse evidence than args.me every time or nearly (nuclear disarmament for a question about "nice guys", cosmetic surgery for a phone question), since IBM-ArgQ covers only 71 motions. Turning it on would also change the evidence slot, so the training examples would need rebuilding with it.
+
 ## Training examples (`scripts/build_training_data.py`)
 
 One example per bot turn in a train or val dialogue: 18,014 train and 2,282 val. The slots are produced by replaying each dialogue the way `ArguBotPipeline.step` does at inference: the tracker has heard the persona's earlier replies, the query is the latest user turn plus the claim log, and the top 3 of the top 10 BM25 passages are kept. The stance filter is not replayed (it needs the NLI model).

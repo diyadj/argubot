@@ -16,6 +16,19 @@ from argubot.retrieval.dummy import DummyRetriever
 from argubot.schemas import Passage
 
 
+def build_retriever(cfg: Dict[str, Any], passages) -> Retriever:
+    """The retriever named by retrieval.method. Both load a saved index from paths.index_dir if there is one."""
+    method = cfg["retrieval"]["method"]
+    index_dir = cfg["paths"]["index_dir"]
+    if method == "bm25":
+        return BM25Retriever(passages, index_dir=index_dir)
+    if method == "dense":
+        from argubot.retrieval.dense import DenseRetriever
+
+        return DenseRetriever.load(f"{index_dir}/dense", cfg["retrieval"]["dense_model"], passages)
+    raise ValueError(f"retrieval.method must be bm25 or dense, got {method!r}")
+
+
 def load_components(cfg: Dict[str, Any], dummy: bool = False) -> Tuple[Generator, Retriever, NLIScorer]:
     if dummy:
         passages = [Passage.from_dict(d) for d in read_jsonl("data/toy/toy_passages.jsonl")]
@@ -31,8 +44,6 @@ def load_components(cfg: Dict[str, Any], dummy: bool = False) -> Tuple[Generator
         max_prompt_tokens=cfg["training"]["max_seq_len"],
     )
     passages = [Passage.from_dict(x) for x in read_jsonl(cfg["paths"]["passages"])]
-    if cfg["retrieval"]["method"] != "bm25":
-        raise NotImplementedError("Dense retrieval is Diya's TODO, use method: bm25 for now")
-    retriever = BM25Retriever(passages)
+    retriever = build_retriever(cfg, passages)
     nli = RobertaMNLIScorer(cfg["nli"]["model"], max_length=cfg["nli"]["max_length"])
     return generator, retriever, nli

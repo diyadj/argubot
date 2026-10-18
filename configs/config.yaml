@@ -13,7 +13,8 @@ paths:
   train_examples: data/processed/train_examples.jsonl
   val_examples: data/processed/val_examples.jsonl
   test_dialogues: data/processed/test_dialogues.jsonl
-  passages: data/processed/passages.jsonl
+  passages: data/processed/passages.jsonl              # args.me, the main index
+  passages_backup: data/processed/passages_ibm_argq.jsonl  # IBM-ArgQ, kept apart so it cannot crowd out args.me
   adapter_dir: outputs/adapter
   transcripts_dir: outputs/transcripts
   results_dir: outputs/results
@@ -81,5 +82,6 @@ nli:
 eval:
   n_boot: 10000
   ci_alpha: 0.05
-  human_eval_dialogues_per_system: 20
+  n_test_debates: 100              # scripted debates every system is run on (scripts/make_test_debates.py)
+  human_eval_dialogues_per_system: 20   # the first 20 of those 100
   n_raters: 2

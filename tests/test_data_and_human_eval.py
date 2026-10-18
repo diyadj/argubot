@@ -85,3 +85,22 @@ def test_kappa_and_system_means_from_filled_sheets(tmp_path):
     assert all(k == 1.0 for k in kappas.values())
     means = mean_scores_by_system(str(tmp_path / "key_PRIVATE.csv"), [str(tmp_path / "rater_1.csv"), str(tmp_path / "rater_2.csv")])
     assert means["D"]["kept_position"] == 1.0 and means["A"]["kept_position"] == 0.0
+
+
+def test_ibm_argq_rows_become_passages_with_motion_and_stance(tmp_path):
+    from argubot.data.argsme import load_ibm_argq
+
+    header = "argument,topic,set,WA,MACE-P,stance_WA,stance_WA_conf\n"
+    (tmp_path / "train.csv").write_text(
+        header + '"Uniforms  help.",We should wear uniforms,train,0.8,0.3,1,1.0\n'
+        '"They cost too much.",We should wear uniforms,train,0.7,0.2,-1,0.9\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "dev.csv").write_text(header + '"",We should wear uniforms,dev,0.5,0.1,1,1.0\n', encoding="utf-8")
+    (tmp_path / "test.csv").write_text(header, encoding="utf-8")
+    out = load_ibm_argq(str(tmp_path))
+    assert [(p.text, p.stance, p.motion) for p in out] == [
+        ("Uniforms help.", "PRO", "We should wear uniforms"),
+        ("They cost too much.", "CON", "We should wear uniforms"),
+    ]
+    assert len({p.source_id for p in out}) == 2

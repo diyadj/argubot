@@ -7,7 +7,7 @@ the real retriever, exactly as the pipeline does at inference time, then store:
     {"history": [...], "claims": [...], "passages": [...], "response": "..."}
 Training on slots that look different from the inference-time slots would hurt systems C1 to D.
 Output: cfg["paths"]["train_examples"] and cfg["paths"]["val_examples"].
-The test split is copied untouched to cfg["paths"]["test_dialogues"].
+The test split is not touched here: scripts/make_test_debates.py picks the scripted test debates from it.
 
 Needs the passages file from scripts/build_indexes.py. Without it, try the smoke test:
     python scripts/build_training_data.py --dummy --limit 50
@@ -20,9 +20,9 @@ from pathlib import Path
 from argubot.config import load_config
 from argubot.data.training_data import build_examples
 from argubot.io import read_jsonl, write_jsonl
-from argubot.retrieval.bm25 import BM25Retriever
 from argubot.retrieval.dummy import DummyRetriever
 from argubot.schemas import Passage
+from argubot.systems.components import build_retriever
 
 
 def main() -> None:
@@ -38,22 +38,17 @@ def main() -> None:
         passages_path = "data/toy/toy_passages.jsonl"
         out_dir = Path(cfg["paths"]["output_dir"]) / "dummy"
         train_out, val_out = out_dir / "train_examples.jsonl", out_dir / "val_examples.jsonl"
-        test_out = out_dir / "test_dialogues.jsonl"
     else:
         passages_path = args.passages or cfg["paths"]["passages"]
         train_out, val_out = cfg["paths"]["train_examples"], cfg["paths"]["val_examples"]
-        test_out = cfg["paths"]["test_dialogues"]
 
     if not Path(passages_path).exists():
         raise SystemExit(
             f"No passages file at {passages_path}. Diya's scripts/build_indexes.py writes it "
             "(args.me needs a manual download). To check the wiring now, add --dummy."
         )
-    if cfg["retrieval"]["method"] != "bm25" and not args.dummy:
-        raise SystemExit("Dense retrieval is not built yet. Set retrieval.method to bm25 in the config.")
-
     passages = [Passage.from_dict(d) for d in read_jsonl(passages_path)]
-    retriever = DummyRetriever(passages) if args.dummy else BM25Retriever(passages)
+    retriever = DummyRetriever(passages) if args.dummy else build_retriever(cfg, passages)
     print(f"{len(passages)} passages from {passages_path}")
 
     dialogues = list(read_jsonl(cfg["paths"]["cmv_chains"]))
@@ -69,9 +64,6 @@ def main() -> None:
     examples = build_examples(dialogues, retriever, cfg, on_dialogue=progress)
     print(f"train: {write_jsonl(str(train_out), examples['train'])} examples -> {train_out}")
     print(f"val:   {write_jsonl(str(val_out), examples['val'])} examples -> {val_out}")
-
-    test = [d for d in dialogues if d["split"] == "test"]
-    print(f"test:  {write_jsonl(str(test_out), test)} dialogues -> {test_out}")
 
 
 if __name__ == "__main__":

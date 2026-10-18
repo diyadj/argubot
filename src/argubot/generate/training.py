@@ -212,6 +212,18 @@ def train(cfg: Dict[str, Any]) -> "TrainResult":
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total = sum(p.numel() for p in model.parameters())
 
+    # Memory: gradient checkpointing trades a little compute for a large drop in activation
+    # memory, which a 24 GB card needs at seq_len 1024 (especially a shared one). use_cache is
+    # incompatible with it, and a LoRA (frozen base) needs inputs to require grad for it to work.
+    model.config.use_cache = False
+    if hasattr(model, "gradient_checkpointing_enable"):
+        try:
+            model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+        except TypeError:
+            model.gradient_checkpointing_enable()
+    if hasattr(model, "enable_input_require_grads"):
+        model.enable_input_require_grads()
+
     # 3. Datasets. Train blanks slots at random each epoch; val keeps every slot filled.
     train_examples = list(read_jsonl(paths["train_examples"]))
     if t.get("max_train_examples"):
@@ -263,6 +275,7 @@ def train(cfg: Dict[str, Any]) -> "TrainResult":
     start = time.time()
     trainer.train()
     train_seconds = time.time() - start
+    model.config.use_cache = True  # re-enable for fast generation after training
 
     # 5. Save the adapter only (PEFT writes adapter_config.json + the LoRA weights).
     adapter_dir = paths["adapter_dir"]

@@ -1,6 +1,15 @@
 # Notebooks
 
-No notebooks yet. Andrea adapts `CS425_Project_Base.ipynb` into four thin runners that import from `src/argubot`.
-The exact list of changes, cell by cell, is in `docs/NOTEBOOK_ADAPTATION.md`.
+Thin runners that import from `src/argubot`.
+The cell-by-cell list of changes is in `docs/NOTEBOOK_ADAPTATION.md`.
+
+| Notebook | Status | What it does |
+| --- | --- | --- |
+| `01_smoke_test.ipynb` | done | Load the model (Qwen3.5, gpt2-medium fallback), confirm `all-linear`, one LoRA step on `data/toy/toy_train_examples.jsonl`, record trainable params + sec/step, generate one reply. |
+| `02_train.ipynb` | todo | Needs `train()` in `generate/training.py`. Load config + examples, train, save adapter, print validation perplexity. |
+| `03_run_and_evaluate.ipynb` | todo | Run `scripts/run_systems.py` and `scripts/evaluate.py` for all five systems; show the results table. |
+| `04_demo.ipynb` | todo | Interactive loop (10 Nov): one pipeline, one `ClaimTracker` across turns, print the claim log and retrieved passages next to each reply. |
+
+To run on the SCIS GPU cluster instead of Colab, see `docs/SCIS_VIOLET.md`.
 
 Keep logic out of the notebooks. If a cell grows past a screen, it belongs in the package with a test.

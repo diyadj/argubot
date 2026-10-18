@@ -45,3 +45,40 @@ def test_padding_masks_labels_and_attention():
     assert batch["input_ids"][1] == [4, 0, 0]
     assert batch["labels"][1] == [4, IGNORE_INDEX, IGNORE_INDEX]
     assert batch["attention_mask"][1] == [1, 0, 0]
+
+
+def test_train_runs_end_to_end_on_toy_data(tmp_path):
+    """Heavier wiring check: a real (tiny) LoRA run on the toy set.
+
+    Skips unless torch/transformers/peft are installed and the tiny model can be fetched, so the
+    fast hermetic tests above still run everywhere. Uses sshleifer/tiny-gpt2 and fp32 for speed.
+    """
+    import copy
+
+    import pytest
+
+    pytest.importorskip("torch")
+    pytest.importorskip("transformers")
+    pytest.importorskip("peft")
+
+    from argubot.config import load_config
+    from argubot.generate.training import TrainResult, train
+
+    cfg = copy.deepcopy(load_config("configs/config.yaml"))
+    cfg["generator"]["base_model"] = "sshleifer/tiny-gpt2"   # 2-layer gpt2, downloads in seconds
+    toy = "data/toy/toy_train_examples.jsonl"
+    cfg["paths"]["train_examples"] = toy
+    cfg["paths"]["val_examples"] = toy
+    cfg["paths"]["adapter_dir"] = str(tmp_path / "adapter")
+    cfg["training"].update(
+        num_epochs=1, per_device_batch_size=2, grad_accum_steps=1, max_seq_len=64, fp16=False
+    )
+
+    try:
+        result = train(cfg)
+    except OSError as e:  # no network to fetch the tiny model
+        pytest.skip(f"model not available offline: {e}")
+
+    assert isinstance(result, TrainResult)
+    assert result.trainable_params > 0
+    assert (tmp_path / "adapter" / "adapter_config.json").exists()  # adapter saved, base not

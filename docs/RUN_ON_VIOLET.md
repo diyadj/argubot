@@ -98,6 +98,29 @@ ssh <yourAccount>@10.193.104.102 scancel <jobID>
 
 ---
 
+## Run the chat demo on the cluster
+
+The demo page and the bot run together on the GPU node; you open the page on your laptop through a second tunnel.
+
+1. Start a GPU notebook (steps 1–5 above). The built passages and indexes are already linked in `~/argubot`
+   (see `docs/DATA_NOTES.md`, "Built files on the SCIS cluster").
+2. In a Jupyter terminal on the node:
+   ```bash
+   cd ~/argubot
+   python scripts/serve_demo.py --dummy --host 0.0.0.0 --port 8000   # fake replies, checks the page
+   python scripts/serve_demo.py --host 0.0.0.0 --port 8000           # real bot, needs outputs/adapter
+   ```
+   `--host 0.0.0.0` lets the login node forward to it; the default `127.0.0.1` only answers on the node itself.
+3. On your laptop, in another PowerShell, tunnel the port to the node (the node name is in the `mynotebook`
+   tunnel line, e.g. `lucas`):
+   ```bash
+   ssh -N -L 8000:<node>:8000 <yourAccount>@10.193.104.102
+   ```
+4. Open http://127.0.0.1:8000.
+
+The demo only runs while the GPU job does (6 h for `mynotebook`). On presentation day, start a fresh job
+well before you present.
+
 ## Troubleshooting (the exact errors we hit)
 
 | Symptom | Cause / fix |

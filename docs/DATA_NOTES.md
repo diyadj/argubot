@@ -46,7 +46,8 @@ Limits (say these in the report): the tuning was done by eye on one sample, not 
 - Premises are packed into passages of at most 120 words on sentence boundaries (so they fit the NLI model); text with no sentence breaks is cut at 120 words, and passages under 8 words are dropped. 345,977 of the 382,545 arguments survive.
 - args.me and IBM-ArgQ are kept in separate passage files, so the short IBM arguments cannot crowd args.me out of the main index.
 - BM25 is an inverted index with the same Okapi scoring as `rank_bm25` (a test compares them). `rank_bm25` took about 19 s per query at this size, an estimated 100 hours for the training set; the index takes about 50 ms, and the saved index loads in under a second.
-- A dense retriever (MiniLM + FAISS) is implemented and tested, and `retrieval.method: dense` switches to it. The full args.me index has not been built: encoding 1.2M passages needs a GPU (about 25 passages per second measured on CPU, roughly 13 hours). The 30k short IBM-ArgQ arguments took 72 seconds on the same CPU, which is what the stance test above uses.
+- A dense retriever (MiniLM + FAISS) is implemented, tested and built over all of args.me: 1,198,728 passages encoded in 471 s on an NVIDIA L40S (about 2,500 passages per second; on CPU it ran at about 25 per second, roughly 13 hours). The index is a flat inner-product index of 384-dimensional vectors, 1.8 GB. A query takes about 50 ms, except the first, which loads the model. `retrieval.method: dense` switches to it; the config still says `bm25` until the group decides.
+- BM25 against dense, read by eye on the top 3 for 3 motions and the last user turn of 3 test debates (`build_indexes.py --dense`, then the comparison run on the cluster). On the short motions both find the right debate. On the conversational CMV turns dense is clearly better: a turn about Deaf culture got deaf-versus-blind arguments from dense, and arguments about Calvinism and Disney from BM25. Dense likes short opening statements ("I will be arguing that ...") that say little. Six queries, so a reading, not a measurement.
 
 ## IBM-ArgQ backup index (`src/argubot/retrieval/fallback.py`)
 
@@ -94,6 +95,18 @@ The test split has 970 dialogues, too many to run five systems on. The script pi
 ## Data files in the repo
 
 `data/processed/` is git-ignored except for three small files: `test_dialogues.jsonl` (the 100 test debates), `train_examples.jsonl.gz` (15 MB) and `val_examples.jsonl.gz` (1.9 MB). After `git pull`, training can start straight away: `read_jsonl` opens `x.jsonl.gz` when only the gzipped copy exists, so the paths in the config work unchanged. The passages (840 MB) and the BM25 index (600 MB) are not committed; `build_indexes.py` rebuilds them in about 4 minutes. If the training examples are rebuilt, gzip the new ones and commit again, since every version stays in the repo history.
+
+## Built files on the SCIS cluster
+
+The passages, the BM25 indexes and the dense index (3.1 GB together) are in `/common/scratch/projectgrps/CS425/CS425G3/argubot_data`, with a `SHA256SUMS` file. `~/argubot` on the cluster links to them, so nothing needs rebuilding. In a fresh clone on the cluster, link them from the repo root:
+
+```
+S=/common/scratch/projectgrps/CS425/CS425G3/argubot_data
+ln -s $S/processed/passages.jsonl $S/processed/passages_ibm_argq.jsonl data/processed/
+for f in bm25_docs.npy bm25_weights.npy bm25_offsets.npy bm25_vocab.json dense ibm_argq; do ln -s $S/indexes/$f data/indexes/$f; done
+```
+
+The dense index stores only vectors, in the order of `passages.jsonl`, and `DenseRetriever.load` only checks the count. Never rebuild one of them without the other.
 
 ## How to reproduce
 

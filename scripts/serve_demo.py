@@ -3,7 +3,7 @@
     python scripts/serve_demo.py --dummy        # fake components, no downloads, checks the page works
     python scripts/serve_demo.py                # real adapter, passages and NLI model (needs a GPU or patience)
 
-Then open http://127.0.0.1:8000. It uses only the standard library, so nothing extra to install.
+Then open http://127.0.0.1:8000. On the GPU cluster add --host 0.0.0.0 and tunnel the port (docs/RUN_ON_VIOLET.md). It uses only the standard library, so nothing extra to install.
 The chat goes through ArguBotPipeline.step, the same code path the evaluated systems use.
 """
 import argparse
@@ -98,11 +98,12 @@ def main() -> None:
     ap.add_argument("--config", default="configs/config.yaml")
     ap.add_argument("--dummy", action="store_true", help="fake components, replies are canned")
     ap.add_argument("--port", type=int, default=8000)
+    ap.add_argument("--host", default="127.0.0.1", help="0.0.0.0 to reach it through an SSH tunnel, e.g. on the GPU cluster")
     args = ap.parse_args()
 
     demo = Demo(load_config(args.config), args.dummy)
-    print(f"ArguBot demo on http://127.0.0.1:{args.port}" + ("  (DUMMY components)" if args.dummy else ""))
-    ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(demo)).serve_forever()
+    print(f"ArguBot demo on http://{args.host}:{args.port}" + ("  (DUMMY components)" if args.dummy else ""))
+    ThreadingHTTPServer((args.host, args.port), make_handler(demo)).serve_forever()
 
 
 if __name__ == "__main__":

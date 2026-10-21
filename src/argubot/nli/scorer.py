@@ -28,6 +28,8 @@ class RobertaMNLIScorer:
         max_length: int = 512,
         batch_size: int = 16,
     ) -> None:
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
         import torch
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
 

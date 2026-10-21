@@ -1,8 +1,19 @@
-from argubot.nli import DummyNLIScorer, rerank, symmetric_contradiction_batch
+import pytest
+
+from argubot.nli import DummyNLIScorer, RobertaMNLIScorer, rerank, symmetric_contradiction_batch
 from argubot.retrieval.stance_filter import StanceConsistencyFilter
 from argubot.schemas import Passage
 
 CLAIMS = ["School uniforms reduce bullying in schools."]
+
+
+def test_roberta_scorer_rejects_non_positive_batch_size():
+    with pytest.raises(ValueError, match="batch_size must be positive"):
+        RobertaMNLIScorer(batch_size=0)
+
+
+def test_dummy_scorer_handles_an_empty_batch():
+    assert DummyNLIScorer().score_batch([]) == []
 
 
 def test_symmetric_batch_takes_the_larger_direction():

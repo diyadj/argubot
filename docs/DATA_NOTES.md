@@ -108,6 +108,25 @@ for f in bm25_docs.npy bm25_weights.npy bm25_offsets.npy bm25_vocab.json dense i
 
 The dense index stores only vectors, in the order of `passages.jsonl`, and `DenseRetriever.load` only checks the count. Never rebuild one of them without the other.
 
+## Trained LoRA adapter on the cluster
+
+The trained LoRA adapter (~62 MB: 43 MB adapter weights + the matching tokenizer) is shared in scratch at `$S/outputs/adapter`, group-readable, with its own `SHA256SUMS`. It is the full-data adapter: `Qwen/Qwen3.5-0.8B-Base` + LoRA (r16, alpha32, all-linear), trained on all 18,014 examples for 3 epochs, validation perplexity 19.15 (from `02_train.ipynb`). `outputs/` is git-ignored, so link it in on the cluster rather than committing it:
+
+```
+S=/common/scratch/projectgrps/CS425/CS425G3/argubot_data
+mkdir -p outputs
+ln -sfn $S/outputs/adapter outputs/adapter
+```
+
+After linking, `scripts/run_systems.py`, `scripts/evaluate.py` and `notebooks/04_demo.ipynb` pick it up with no config change (they read `paths.adapter_dir: outputs/adapter`). It only means anything on top of the same base model, `Qwen/Qwen3.5-0.8B-Base`. To refresh it, retrain with `02_train.ipynb`, then re-copy to `$S/outputs/adapter` and regenerate its `SHA256SUMS`:
+
+```
+S=/common/scratch/projectgrps/CS425/CS425G3/argubot_data
+cp -r ~/argubot/outputs/adapter "$S/outputs/adapter"
+chmod -R g+rX "$S/outputs/adapter"
+sha256sum "$S/outputs/adapter"/* > "$S/outputs/adapter/SHA256SUMS"
+```
+
 ## How to reproduce
 
 ```

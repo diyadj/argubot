@@ -1,33 +1,36 @@
-# Core
-pyyaml
-numpy
-pytest
+# Pinned to the environment that ran the five systems and the evaluation on the SCIS cluster
+# (Python 3.11.11, jupyterlab-venv-pytorch-240 on an RTX 3090, 27 Oct). Qwen3.5 is version-sensitive,
+# so keep transformers and peft at these versions.
 
-# Models and training (Colab already has torch)
-torch
-transformers
-peft
-accelerate
-datasets
-sentence-transformers
+# Core
+pyyaml==6.0.3
+numpy==2.4.6
+pytest==9.1.1
+
+# Models and training (torch 2.14.1 was the CUDA 13.0 build; Colab already has torch)
+torch==2.14.1
+transformers==5.20.1
+tokenizers==0.23.3
+safetensors==0.8.0
+huggingface_hub==1.33.0
+peft==0.21.2
+accelerate==1.15.0
+sentence-transformers==6.1.0
+datasets        # only used by the data-building scripts, not installed on the cluster env
 
 # Retrieval
-rank_bm25
-faiss-cpu
+rank-bm25==0.2.2
+faiss-cpu==1.15.1
 
 # Claim tracker
-spacy
-# then run: python -m spacy download en_core_web_sm
+spacy==3.8.16
+# then run: python -m spacy download en_core_web_sm   (3.8.0 on the cluster)
 
-# Data
+# Data (CMV download and persona chains only; not installed on the cluster env)
 convokit
 
 # Optional, GPU only: the fast Qwen3.5 Gated DeltaNet kernel (about 10x faster).
 # The notebooks and scripts/violet_run.sbatch install it themselves; it will not build on Windows.
-# flash-linear-attention
+# flash-linear-attention==0.5.2
 
-# Notes
-# - Qwen3.5 is new, so use a recent transformers release. If it will not load,
-#   switch generator.base_model to the fallback in configs/config.yaml.
-# - Pin the versions that worked for your training run before the final submission,
-#   then paste the pinned list here so the report's "how to run" section is exact.
+# If Qwen3.5 will not load, switch generator.base_model to the fallback in configs/config.yaml.

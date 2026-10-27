@@ -7,7 +7,7 @@ can run and test their own lane before the real model is wired up. Never report 
 from __future__ import annotations
 
 import re
-from typing import List, Optional, Protocol, Sequence, Tuple
+from typing import Callable, List, Optional, Protocol, Sequence, Tuple
 
 from argubot.schemas import NLIScore
 
@@ -19,7 +19,8 @@ class NLIScorer(Protocol):
 
 
 class RobertaMNLIScorer:
-    """roberta-large-mnli. Labels are read from the model config instead of assumed."""
+    """roberta-large-mnli. Labels are read from the model config instead of assumed, so any
+    three-way NLI model loads the same way (the strict metric uses a DeBERTa one)."""
 
     def __init__(
         self,
@@ -99,11 +100,15 @@ class DummyNLIScorer:
         return [self.score(p, h) for p, h in pairs]
 
 
-def symmetric_contradiction_batch(scorer: NLIScorer, pairs: Sequence[Tuple[str, str]]) -> List[float]:
-    """Contradiction probability for each pair, taking the larger of both directions.
+def symmetric_contradiction_batch(
+    scorer: NLIScorer, pairs: Sequence[Tuple[str, str]], combine: Callable[[float, float], float] = max
+) -> List[float]:
+    """Contradiction probability for each pair, combining both directions (the larger by default).
 
     NLI is not symmetric, so A contradicting B can score differently from B contradicting A.
     The proposal checks both directions, and so does everything built on this function.
+    combine=min asks both directions to agree, which the strict metric uses: in the NLI check,
+    2 of the 3 false alarms came from one direction only.
     """
     if not pairs:
         return []
@@ -111,4 +116,4 @@ def symmetric_contradiction_batch(scorer: NLIScorer, pairs: Sequence[Tuple[str, 
     backward = [(h, p) for p, h in pairs]
     scores = scorer.score_batch(forward + backward)
     n = len(pairs)
-    return [max(scores[i].contradiction, scores[n + i].contradiction) for i in range(n)]
+    return [combine(scores[i].contradiction, scores[n + i].contradiction) for i in range(n)]

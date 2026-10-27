@@ -1,0 +1,24 @@
+{"claim": "School uniforms reduce bullying in schools.", "text": "School uniforms reduce bullying in schools because clothing differences matter less.", "contradiction": false}
+{"claim": "School uniforms reduce bullying in schools.", "text": "School uniforms do not reduce bullying in schools, and some studies find no effect.", "contradiction": true}
+{"claim": "School uniforms reduce bullying in schools.", "text": "Uniforms save families money every year because they replace fashionable clothes.", "contradiction": false}
+{"claim": "Uniforms help students express themselves.", "text": "Uniforms limit self expression, which matters for the development of students.", "contradiction": true}
+{"claim": "Uniforms save families money.", "text": "Uniforms limit self expression, which matters for the development of students.", "contradiction": false}
+{"claim": "There is strong evidence that uniforms raise grades.", "text": "Research linking uniforms to higher grades is weak and often confounded by other school policies.", "contradiction": true}
+{"claim": "The death penalty deters crime.", "text": "States with capital punishment do not have lower murder rates than states without it.", "contradiction": true}
+{"claim": "The death penalty deters crime.", "text": "Executing murderers discourages others from committing murder.", "contradiction": false}
+{"claim": "The death penalty is cheaper than life imprisonment.", "text": "Death penalty cases cost far more than life sentences because of the long appeals.", "contradiction": true}
+{"claim": "Innocent people have been executed.", "text": "The death penalty is expensive to administer.", "contradiction": false}
+{"claim": "Raising the minimum wage costs jobs.", "text": "Higher minimum wages have not led to job losses.", "contradiction": true}
+{"claim": "Raising the minimum wage costs jobs.", "text": "Small businesses often cut staff hours when wages go up.", "contradiction": false}
+{"claim": "Nuclear power is safe.", "text": "Nuclear energy has one of the lowest death rates per unit of electricity.", "contradiction": false}
+{"claim": "Nuclear power is safe.", "text": "Nuclear plants are dangerous, as Chernobyl and Fukushima showed.", "contradiction": true}
+{"claim": "Nuclear power is too expensive.", "text": "Nuclear power is safe.", "contradiction": false}
+{"claim": "Homework improves learning in primary school.", "text": "For young children, homework has almost no effect on achievement.", "contradiction": true}
+{"claim": "Video games make children violent.", "text": "Video games are a popular hobby around the world.", "contradiction": false}
+{"claim": "Social media harms teenagers' mental health.", "text": "Social media helps teenagers stay connected with their friends.", "contradiction": false}
+{"claim": "Animal testing is necessary for medical progress.", "text": "Most medical advances could not have happened without animal research.", "contradiction": false}
+{"claim": "Animal testing is necessary for medical progress.", "text": "We no longer need animal testing, since modern alternatives work just as well.", "contradiction": true}
+{"claim": "Zoos protect endangered species.", "text": "Zoos play no meaningful role in conservation.", "contradiction": true}
+{"claim": "I support a four-day work week.", "text": "I am against shortening the work week.", "contradiction": true}
+{"claim": "Remote work increases productivity.", "text": "Some workers feel lonely when working from home.", "contradiction": false}
+{"claim": "Voting should be compulsory.", "text": "Nobody should be forced to vote.", "contradiction": true}

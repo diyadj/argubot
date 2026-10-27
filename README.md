@@ -42,7 +42,7 @@ Run these from the repo root. This is also the draft of the report's "how to run
 5. `python scripts/make_test_debates.py` picks the 100 scripted test debates.
 6. `python scripts/train_lora.py` trains the adapter (or use `notebooks/02_train.ipynb`).
 7. `python scripts/run_systems.py` runs A, B, C1, C2 and D on the test debates. Add `--limit 3 --out outputs/check3` for a quick check.
-8. `python scripts/evaluate.py --human` computes contradiction rate, guardrails and bootstrap intervals against system A, with the real CMV replies as a reference row. Add `--baseline B` for the core test (C1 against B) and `--threshold 0.8` for the sensitivity check. Flagged contradiction pairs go to `outputs/results/flagged_<system>.jsonl`.
+8. `python scripts/evaluate.py --human` computes contradiction rate, guardrails and bootstrap intervals against system A, with the real CMV replies as a reference row. Add `--baseline B` for the core test (C1 against B) and `--threshold 0.8` for the sensitivity check. Flagged contradiction pairs go to `outputs/results/flagged_<system>.jsonl`. `--strict` uses the strict metric instead (only real assertions against self-contained sentences on the same subject, both NLI directions agreeing, a different NLI model from the reranker's); its two cut-offs come from `python scripts/calibrate_strict_metric.py`, which uses no system output, and `python scripts/make_precision_sheet.py` builds a blinded sheet to measure how many of its flags are real.
 9. `python scripts/make_rating_sheets.py` writes blinded sheets for the two human raters.
 10. `python scripts/score_ratings.py` checks the filled-in sheets and computes Cohen's kappa and per-system scores.
 11. `python scripts/print_hparams.py` prints the hyperparameter table for the report.

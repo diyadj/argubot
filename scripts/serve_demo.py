@@ -102,7 +102,8 @@ def main() -> None:
     args = ap.parse_args()
 
     demo = Demo(load_config(args.config), args.dummy)
-    print(f"ArguBot demo on http://{args.host}:{args.port}" + ("  (DUMMY components)" if args.dummy else ""))
+    # flush: under nohup the output is a file, and without it "ready" never shows in the log
+    print(f"ArguBot demo on http://{args.host}:{args.port}" + ("  (DUMMY components)" if args.dummy else ""), flush=True)
     ThreadingHTTPServer((args.host, args.port), make_handler(demo)).serve_forever()
 
 

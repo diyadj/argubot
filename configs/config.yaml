@@ -94,5 +94,5 @@ eval:
     nli_model: MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli   # not the reranker's model
     similarity_model: sentence-transformers/all-MiniLM-L6-v2
     min_words: 6                  # shorter reply sentences are not judged
-    threshold: null               # both NLI directions must reach this
-    min_similarity: null          # pairs less similar than this are about different things
+    threshold: 0.7                # both NLI directions must reach this (calibrated 27 Oct)
+    min_similarity: 0.4           # pairs less similar than this are about different things (calibrated 27 Oct)

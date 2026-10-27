@@ -90,7 +90,7 @@ Reading 12 random training examples, by my own judgement about 4 had clearly rel
 
 ## Scripted test debates (`scripts/make_test_debates.py`)
 
-The test split has 970 dialogues, too many to run five systems on. The script picks **100 debates**: test split only, exactly three user turns (so each system gives three replies to compare), no delta-award turns and no user turn under 5 words, one per thread, seeded shuffle (seed 42). The first 20 are the human-rating subset.
+The test split has 970 dialogues, too many to run five systems on. The script picks **100 debates**: test split only, exactly three user turns (so each system gives three replies to compare), no delta-award turns and no user turn under 5 words, one per thread, seeded shuffle (seed 42). The human-rating subset is 20 of these, drawn at random with seed 42 by `make_rating_sheets.py`.
 
 ## Data files in the repo
 

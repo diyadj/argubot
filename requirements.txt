@@ -22,6 +22,10 @@ spacy
 # Data
 convokit
 
+# Optional, GPU only: the fast Qwen3.5 Gated DeltaNet kernel (about 10x faster).
+# The notebooks and scripts/violet_run.sbatch install it themselves; it will not build on Windows.
+# flash-linear-attention
+
 # Notes
 # - Qwen3.5 is new, so use a recent transformers release. If it will not load,
 #   switch generator.base_model to the fallback in configs/config.yaml.

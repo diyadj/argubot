@@ -55,3 +55,13 @@ def test_contradiction_rate_skips_the_first_turn_and_flags_a_reversal():
 
 def test_contradiction_rate_is_zero_for_single_turn_debates():
     assert contradiction_rate([transcript("s", ["Only one reply here today."])], DummyNLIScorer()).rate == 0.0
+
+
+def test_human_transcripts_pair_each_persona_reply_with_the_user_turn_before_it():
+    from argubot.eval.metrics import human_transcripts
+    from argubot.schemas import Dialogue, Turn
+
+    d = Dialogue("d1", [Turn("user", "u1"), Turn("bot", "b1"), Turn("user", "u2"), Turn("bot", "b2")])
+    (t,) = human_transcripts([d])
+    assert t.system == "human" and [(r.user_text, r.bot_text) for r in t.turns] == [("u1", "b1"), ("u2", "b2")]
+    assert human_transcripts([Dialogue("toy", [Turn("user", "u1")])])[0].turns == []

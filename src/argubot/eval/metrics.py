@@ -12,7 +12,7 @@ from typing import Callable, Dict, List, Optional, Sequence
 
 from argubot.claims.tracker import extract_claims
 from argubot.nli.scorer import NLIScorer, symmetric_contradiction_batch
-from argubot.schemas import Transcript
+from argubot.schemas import Dialogue, Transcript, TurnRecord
 from argubot.text import split_sentences
 
 
@@ -78,6 +78,25 @@ def contradiction_rate(
 
     rate = n_flagged / n_turns if n_turns else 0.0
     return ContradictionResult(rate, n_turns, n_flagged, per_dialogue, flagged)
+
+
+def human_transcripts(dialogues: Sequence[Dialogue]) -> List[Transcript]:
+    """The real CMV persona replies of the test debates, as transcripts of a system called "human".
+
+    Scored like any system, they give the metric's noise floor: people rarely contradict themselves
+    outright, so whatever rate they get is mostly NLI and claim-extraction error. Dialogues
+    without bot turns (the toy ones) give empty transcripts.
+    """
+    out = []
+    for d in dialogues:
+        turns, user = [], ""
+        for t in d.turns:
+            if t.speaker == "user":
+                user = t.text
+            else:
+                turns.append(TurnRecord(user, t.text, [], [], [], ""))
+        out.append(Transcript(d.dialogue_id, "human", turns))
+    return out
 
 
 def distinct_n(texts: Sequence[str], n: int = 2) -> float:

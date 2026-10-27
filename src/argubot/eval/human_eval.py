@@ -82,12 +82,26 @@ def kappa_per_criterion(rater1_csv: str, rater2_csv: str) -> Dict[str, Optional[
     result: Dict[str, Optional[float]] = {}
     for crit in CRITERIA:
         pairs = [
-            (a[i][crit], b[i][crit])
+            (a[i][crit].strip(), b[i][crit].strip())  # "1 " and "1" are the same score
             for i in a
             if i in b and a[i][crit].strip() != "" and b[i][crit].strip() != ""
         ]
         result[crit] = cohens_kappa([p[0] for p in pairs], [p[1] for p in pairs]) if pairs else None
     return result
+
+
+def check_sheet(path: str, items: Sequence[str]) -> List[str]:
+    """Problems that would quietly skew the scores: missing items, blanks, anything but 0 or 1."""
+    rows = _read(path)
+    problems = [f"{i}: missing from the sheet" for i in items if i not in rows]
+    for item_id, row in rows.items():
+        for crit in CRITERIA:
+            value = row[crit].strip()
+            if value == "":
+                problems.append(f"{item_id} {crit}: blank")
+            elif value not in ("0", "1"):
+                problems.append(f"{item_id} {crit}: {row[crit]!r} is not 0 or 1")
+    return problems
 
 
 def mean_scores_by_system(key_csv: str, rater_csvs: Sequence[str]) -> Dict[str, Dict[str, float]]:

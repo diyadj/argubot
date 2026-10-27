@@ -118,3 +118,16 @@ def test_read_jsonl_falls_back_to_the_gzipped_copy(tmp_path):
     plain.unlink()  # only a.jsonl.gz is left, as after a git pull
     assert [r["x"] for r in read_jsonl(str(plain))] == [1, 2]
     assert [r["x"] for r in read_jsonl(str(plain) + ".gz")] == [1, 2]
+
+
+def test_kappa_ignores_stray_spaces_and_bad_cells_are_reported(tmp_path):
+    from argubot.eval.human_eval import check_sheet
+
+    header = "item_id,dialogue,kept_position,answered_counterargument,used_support_correctly,notes\n"
+    (tmp_path / "r1.csv").write_text(header + "item000,x,1,0,1,\nitem001,x,0,1,1,\n", encoding="utf-8")
+    (tmp_path / "r2.csv").write_text(header + "item000,x,1 ,0, 1,\nitem001,x,0,1,yes,\n", encoding="utf-8")
+    kappas = kappa_per_criterion(str(tmp_path / "r1.csv"), str(tmp_path / "r2.csv"))
+    assert kappas["kept_position"] == 1.0
+    assert check_sheet(str(tmp_path / "r1.csv"), ["item000", "item001"]) == []
+    problems = check_sheet(str(tmp_path / "r2.csv"), ["item000", "item001", "item002"])
+    assert problems == ["item002: missing from the sheet", "item001 used_support_correctly: 'yes' is not 0 or 1"]

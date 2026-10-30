@@ -132,3 +132,23 @@ def test_step_matches_run_debate_and_grows_history():
     ]
     assert replies == full.bot_replies()
     assert len(history) == 4
+
+
+class CutOffGenerator:
+    """Every candidate stops mid-sentence, as when generation hits max_new_tokens."""
+
+    def generate(self, prompt, n=1, seed=None):
+        return ["Uniforms save families money. They also reduce bullying because"] * n
+
+
+def test_cut_off_replies_are_trimmed_to_the_last_full_sentence():
+    pipe = make_pipeline("D")
+    pipe.generator = CutOffGenerator()
+    t = pipe.run_debate(Dialogue.from_dict({"dialogue_id": "t1", "turns": [
+        {"speaker": "user", "text": "Uniforms are bad."},
+        {"speaker": "user", "text": "What about cost?"},
+    ]}))
+    for turn in t.turns:
+        assert turn.bot_text == "Uniforms save families money."
+        assert all(c == "Uniforms save families money." for c in turn.candidates)
+    assert t.turns[1].claims_in_prompt == ["Uniforms save families money."]

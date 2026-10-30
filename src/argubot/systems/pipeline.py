@@ -19,6 +19,7 @@ from argubot.retrieval.base import Retriever, build_query
 from argubot.retrieval.stance_filter import StanceConsistencyFilter
 from argubot.schemas import Dialogue, Passage, Transcript, Turn, TurnRecord
 from argubot.systems.specs import SystemSpec
+from argubot.text import trim_unfinished
 
 
 def turn_seed(base_seed: int, dialogue_id: str, turn_index: int) -> int:
@@ -101,7 +102,9 @@ class ArguBotPipeline:
             max_passage_words=p["max_passage_words"],
         )
         seed = turn_seed(self.cfg["seed"], dialogue_id, turn_index)
-        candidates = self.generator.generate(prompt, n=self.spec.n_candidates, seed=seed)
+        # A candidate that hit max_new_tokens ends mid-sentence. Trim it before anything reads it,
+        # so neither the reranker, the history nor the claim log sees the unfinished part.
+        candidates = [trim_unfinished(c) for c in self.generator.generate(prompt, n=self.spec.n_candidates, seed=seed)]
         reply = self._choose(candidates, claims)
 
         history.append(Turn("bot", reply))

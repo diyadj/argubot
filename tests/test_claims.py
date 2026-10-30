@@ -80,3 +80,19 @@ def test_run_on_is_cut_before_because_or_dropped():
 def test_short_exclamations_are_not_claims_but_i_think_is():
     out = extract_claims("OK, now we're getting somewhere! I think uniforms reduce bullying.", use_spacy=False)
     assert out == ["I think uniforms reduce bullying."]
+
+
+def test_a_cut_off_last_sentence_is_not_a_claim():
+    # Generation stops at max_new_tokens, often mid-sentence. The fragment is not something the
+    # bot said, so it must not reach the claim log (it used to, with a full stop added).
+    text = "Uniforms save families a lot of money. The reason why uniforms help is that students"
+    assert extract_claims(text, use_spacy=False) == ["Uniforms save families a lot of money."]
+
+
+def test_a_reply_cut_off_after_one_letter_is_unfinished():
+    from argubot.text import is_finished, trim_unfinished
+
+    assert not is_finished("You can't give people a right to do anything. I")
+    assert is_finished('He said "uniforms work."') and is_finished("Uniforms work (mostly).")
+    assert trim_unfinished("Uniforms work. I") == "Uniforms work."
+    assert trim_unfinished("no sentence end at all") == "no sentence end at all"

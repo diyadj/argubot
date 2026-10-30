@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import Callable, List, Optional, Tuple
 
-from argubot.text import jaccard, split_sentences, words
+from argubot.text import is_finished, jaccard, split_sentences, trim_unfinished, words
 
 MIN_WORDS = 4
 MAX_CLAIM_WORDS = 40  # longer than this is a run-on, which makes a poor claim for the NLI check
@@ -83,12 +83,17 @@ def extract_claims(text: str, use_spacy: bool = True) -> List[str]:
     """Return the declarative, un-hedged claims in a reply.
 
     Tuned on 50 real CMV bot replies. What the filters do, and why:
-      - questions, short exclamations, quotes and hedged sentences ("maybe", "might") are skipped.
+      - questions, short exclamations, quotes and hedged sentences ("maybe", "might") are skipped,
+        and so is an unfinished last sentence (generation hit max_new_tokens).
         "I think X" is kept: in a debate it is still the speaker's position.
       - a concession ("uniforms can be cheaper, but ...") keeps only the part after "but".
       - a sentence with ";" becomes one claim per clause, and a sentence over MAX_CLAIM_WORDS
         is cut before "because" or dropped, since a run-on is a poor claim to check for contradictions.
     """
+    # Drop an unfinished ending first: spaCy can split one cut-off sentence into two "sentences".
+    text = trim_unfinished(text)
+    if not is_finished(text):
+        return []  # not one complete sentence
     nlp = _load_spacy() if use_spacy else None
     if nlp is None:
         sentences = split_sentences(text)

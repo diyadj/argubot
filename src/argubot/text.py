@@ -10,6 +10,7 @@ _SENT_SPLIT = re.compile(
     "(?:(?<=[.!?])|(?<=[.!?][\"'”’)\\]]))\\s+(?=[A-Z0-9\"'“‘(\\[])"
 )
 _WORD = re.compile(r"[a-z0-9']+")
+_SENT_END = re.compile("[.!?][\"'”’)\\]]*(?=\\s|$)")
 
 
 def flatten_whitespace(text: str) -> str:
@@ -26,6 +27,23 @@ def split_sentences(text: str) -> List[str]:
     if not text:
         return []
     return [s.strip() for s in _SENT_SPLIT.split(text) if s.strip()]
+
+
+def is_finished(sentence: str) -> bool:
+    """True when the sentence ends in . ! or ?, optionally followed by a closing quote or bracket."""
+    s = sentence.rstrip()
+    ends = list(_SENT_END.finditer(s))
+    return bool(ends) and ends[-1].end() == len(s)
+
+
+def trim_unfinished(text: str) -> str:
+    """Cut a reply back to the end of its last complete sentence.
+
+    Generation stops at max_new_tokens, often mid-sentence ("... not responsible, because").
+    A reply with no complete sentence at all is returned as it is, so the bot never goes silent.
+    """
+    ends = list(_SENT_END.finditer(text))
+    return text[: ends[-1].end()] if ends else text
 
 
 def words(text: str) -> List[str]:

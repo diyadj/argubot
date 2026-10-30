@@ -26,6 +26,7 @@
 #SBATCH --job-name=argubot-run
 #SBATCH --output=%u.%j.out                     # log file: <user>.<jobid>.out in the submit dir
 #SBATCH --mail-type=BEGIN,END,FAIL
+#SBATCH --gres=gpu:1                           # for the whole job, so each srun step below can use it
 #SBATCH --mem=32G                              # the BM25 index and 1.2M passages need ~10 GB
 #SBATCH --time=20:00:00                        # cs425qos max is 1 day; resubmit to continue
 ## Note: cs425qos allows only 1 running / 2 submitted jobs at a time.
@@ -44,24 +45,17 @@ for f in outputs/adapter data/processed/passages.jsonl data/indexes/bm25_docs.np
     fi
 done
 
-# --- Environment (same env as scripts/violet_train.sbatch) -------------------
-module purge
-module load Anaconda3/2022.05
-eval "$(conda shell.bash hook)"               # do NOT run `conda init` on a shared account
-
-ENV_NAME=argubot
-if ! conda env list | grep -q "^${ENV_NAME} "; then
-    conda create -n "${ENV_NAME}" python=3.11 -y
-    conda activate "${ENV_NAME}"
-    pip install -e .
-    pip install -r requirements.txt
-    python -m spacy download en_core_web_sm
-else
-    conda activate "${ENV_NAME}"
+# --- Environment ---------------------------------------------------------------
+# The group's Jupyter venv, which ran the five systems and the evaluation (requirements.txt is
+# pinned to it). The Anaconda3/2022.05 module this used to load no longer exists on the cluster.
+VENV=/common/home/projectgrps/CS425/CS425G3/jupyterlab-venv-pytorch-240
+if [ ! -x "$VENV/bin/python3" ]; then
+    echo "Missing $VENV. Start a PyTorch notebook with mynotebook once to create it." >&2
+    exit 1
 fi
-python -c "import fla" 2>/dev/null || pip install -q flash-linear-attention || true
+source "$VENV/bin/activate"
 
-python -c "import torch; print('torch', torch.__version__, 'cuda', torch.cuda.is_available())"
+python3 -c "import torch, argubot; print('torch', torch.__version__, 'cuda', torch.cuda.is_available())" || exit 1
 
 # --- Run, one system at a time -----------------------------------------------
 for S in $SYSTEMS; do

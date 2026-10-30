@@ -53,6 +53,8 @@ if [ ! -x "$VENV/bin/python3" ]; then
     echo "Missing $VENV. Start a PyTorch notebook with mynotebook once to create it." >&2
     exit 1
 fi
+module purge
+module load Python/3.11.11-GCCcore-13.3.0     # the venv's base Python (pyvenv.cfg); provides libpython3.11
 source "$VENV/bin/activate"
 
 python3 -c "import torch, argubot; print('torch', torch.__version__, 'cuda', torch.cuda.is_available())" || exit 1

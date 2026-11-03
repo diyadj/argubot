@@ -12,6 +12,7 @@ import random
 import re
 import shutil
 import signal
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -487,6 +488,7 @@ class TrainResult:
     checkpoint: Optional[str] = None
     step_seconds: List[float] = field(default_factory=list)
     peak_memory_gb: Optional[float] = None
+    train_losses: List[float] = field(default_factory=list)
 
 
 def train(
@@ -613,10 +615,13 @@ def train(
         oom_error = getattr(torch, "OutOfMemoryError", None) or torch.cuda.OutOfMemoryError
         timer = _make_step_timer()
         valid = _training_argument_names(TrainingArguments)
+        # The timing test saves nothing, so it gets a throwaway folder and never touches the real
+        # checkpoint folder of a run that may be half way through.
+        trainer_dir = tempfile.mkdtemp(prefix="argubot-timing-") if timing else checkpoint_dir
         start = time.time()
         while True:
             desired = dict(
-                output_dir=checkpoint_dir,
+                output_dir=trainer_dir,
                 per_device_train_batch_size=per_device,
                 per_device_eval_batch_size=per_device,
                 gradient_accumulation_steps=accum,
@@ -625,7 +630,7 @@ def train(
                 warmup_ratio=float(t.get("warmup_ratio") or 0.0),
                 fp16=precision == "fp16",
                 bf16=precision == "bf16",
-                logging_steps=10,
+                logging_steps=5 if timing else 10,
                 save_strategy="steps" if save_steps else "no",
                 save_steps=save_steps or 500,          # not used when save_strategy is "no"
                 save_total_limit=int(t.get("save_total_limit") or 2),
@@ -686,6 +691,7 @@ def train(
             per_device_batch_size=per_device, grad_accum_steps=accum,
             global_step=state.global_step, max_steps=state.max_steps,
             step_seconds=list(timer.seconds), peak_memory_gb=peak,
+            train_losses=[float(e["loss"]) for e in state.log_history if "loss" in e],
         )
         if timing:
             return result

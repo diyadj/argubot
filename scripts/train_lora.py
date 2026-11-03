@@ -1,6 +1,11 @@
 """Train the LoRA adapter (owner: Andrea).
 
     python scripts/train_lora.py --config configs/config_4b.yaml
+    python scripts/train_lora.py --config configs/config_4b.yaml --timing-test 30
+
+The timing test trains 30 real steps on the card it lands on (nothing is saved), times a few
+validation batches, and projects how long the full run takes and how many 24 h jobs it needs.
+It writes the result to outputs/timing/. Run it before the full 4B job.
 
 On the cluster, run it through scripts/violet_train.sbatch instead (docs/UPGRADE_TO_4B.md).
 
@@ -10,7 +15,11 @@ itself. When training finishes it also measures validation perplexity (reply tok
 every slot filled, the same as notebooks/02_train.ipynb) and adds it to training_summary.json.
 """
 import argparse
+import importlib.util
+import json
 import sys
+import time
+from pathlib import Path
 
 from argubot.config import load_config
 from argubot.generate.training import EXIT_STOPPED_EARLY, train, write_training_summary
@@ -30,6 +39,59 @@ def validation_perplexity(result) -> float:
     return perplexity(result.model, loader)
 
 
+def eval_seconds_per_example(result, n: int = 64) -> float:
+    """Forward-pass time per validation example, measured after one untimed warm-up batch."""
+    import torch
+    from torch.utils.data import DataLoader, Subset
+
+    from argubot.eval.metrics import perplexity
+    from argubot.generate.training import ReplyOnlyCollator
+
+    bs = result.per_device_batch_size
+    n = max(bs, min(n, len(result.val_dataset)))
+    collate = ReplyOnlyCollator(result.tokenizer.pad_token_id)
+    perplexity(result.model, DataLoader(Subset(result.val_dataset, range(bs)), batch_size=bs, collate_fn=collate))
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+    start = time.time()
+    perplexity(result.model, DataLoader(Subset(result.val_dataset, range(n)), batch_size=bs, collate_fn=collate))
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+    return (time.time() - start) / n
+
+
+def run_timing_test(cfg, config_path: str, steps: int) -> None:
+    import torch
+
+    from argubot.generate.timing import format_report, timing_report
+
+    result = train(cfg, max_steps=steps)
+    cuda = torch.cuda.is_available()
+    report = timing_report(
+        model_name=result.model_name,
+        gpu=torch.cuda.get_device_name(0) if cuda else "cpu",
+        gpu_memory_gb=torch.cuda.get_device_properties(0).total_memory / 1024**3 if cuda else None,
+        precision=result.precision,
+        per_device=result.per_device_batch_size,
+        accum=result.grad_accum_steps,
+        step_seconds=result.step_seconds,
+        eval_seconds_per_example=eval_seconds_per_example(result),
+        n_train=len(result.train_dataset),
+        n_val=len(result.val_dataset),
+        configured_epochs=int(cfg["training"]["num_epochs"]),
+        train_losses=result.train_losses,
+        peak_memory_gb=result.peak_memory_gb,
+        fla_installed=importlib.util.find_spec("fla") is not None,
+    )
+    print("\n" + format_report(report))
+    out_dir = Path(cfg["paths"]["output_dir"]) / "timing"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    gpu_slug = "".join(c if c.isalnum() else "-" for c in report["gpu"]).strip("-").lower()
+    out = out_dir / f"{Path(config_path).stem}_{gpu_slug}_{time.strftime('%Y%m%d-%H%M')}.json"
+    out.write_text(json.dumps(report, indent=2))
+    print(f"\nsaved to {out}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="configs/config.yaml")
@@ -37,12 +99,18 @@ def main() -> None:
                     help="replace an adapter that is already in paths.adapter_dir")
     ap.add_argument("--skip-perplexity", action="store_true",
                     help="do not measure validation perplexity after training")
+    ap.add_argument("--timing-test", type=int, metavar="STEPS", default=None,
+                    help="train only this many steps, save nothing, and project the full run")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
     print(f"config     : {args.config}")
     print(f"base model : {cfg['generator']['base_model']}")
     print(f"adapter to : {cfg['paths']['adapter_dir']}", flush=True)
+
+    if args.timing_test:
+        run_timing_test(cfg, args.config, args.timing_test)
+        return
 
     result = train(cfg, overwrite=args.overwrite)
     if result.stopped_early:

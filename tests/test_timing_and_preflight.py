@@ -60,6 +60,17 @@ def test_a_healthy_report_has_no_warnings():
     json.dumps(r)   # it is saved as JSON
 
 
+def test_no_logged_loss_is_not_mistaken_for_a_nan():
+    text = " ".join(_report(train_losses=[])["warnings"])
+    assert "No training loss was logged" in text and "not finite" not in text
+
+
+def test_a_note_from_the_caller_ends_up_in_the_warnings():
+    r = _report(notes=["Could not time validation, so its hours are an estimate."])
+    assert r["warnings"][0].startswith("Could not time validation")
+    assert "WARNING: Could not time validation" in format_report(r)
+
+
 def test_nan_loss_missing_kernel_and_tight_memory_are_flagged():
     r = _report(train_losses=[float("nan")], fla_installed=False, peak_memory_gb=44.0)
     text = " ".join(r["warnings"])

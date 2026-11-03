@@ -39,6 +39,10 @@ done
 module purge
 module load Python/3.11.11-GCCcore-13.3.0
 source "${ARGUBOT_VENV:-/common/home/projectgrps/CS425/CS425G3/jupyterlab-venv-pytorch-240}/bin/activate"
+# Lets PyTorch grow its memory blocks instead of leaving gaps it cannot reuse. Qwen's big
+# vocabulary asks for a few GB at a time, and without this a 24 GB card ran out with 5 GB
+# reserved but unused. It changes how memory is handed out, not any result.
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # All five systems there, with the same debates each.
 python3 scripts/preflight.py --config "$CONFIG" --stage eval --transcripts "$TDIR" || exit 1

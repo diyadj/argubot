@@ -65,6 +65,7 @@ training:
   max_seq_len: 1024
   per_device_batch_size: 4        # fits with gradient checkpointing; drop to 2 (grad_accum 8) if a shared card OOMs
   grad_accum_steps: 4             # effective batch = per_device_batch_size x this = 16
+  eval_batch_size: null           # validation batch; null means the same as per_device_batch_size
   learning_rate: 2.0e-4
   num_epochs: 3
   # 0.0 because that is what the 0.8B adapter really got: transformers 5.x renamed this setting to

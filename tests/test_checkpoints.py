@@ -252,3 +252,32 @@ def test_a_run_stopped_by_the_time_limit_signal_resumes_and_finishes(tmp_path):
 
     with pytest.raises(FileExistsError):
         train(cfg)
+
+
+# --- forward-only passes step down when the GPU is full -------------------------------------
+
+def test_a_forward_pass_that_runs_out_of_memory_is_retried_with_a_smaller_batch():
+    torch = pytest.importorskip("torch")
+    from argubot.generate.training import run_with_smaller_batches
+
+    tried = []
+
+    def measure(bs):
+        tried.append(bs)
+        if bs > 1:
+            raise torch.OutOfMemoryError("CUDA out of memory (pretend)")
+        return 21.6
+
+    assert run_with_smaller_batches(measure, 4, label="a test") == (21.6, 1)
+    assert tried == [4, 2, 1]
+
+
+def test_running_out_of_memory_at_batch_one_is_still_an_error():
+    torch = pytest.importorskip("torch")
+    from argubot.generate.training import run_with_smaller_batches
+
+    def measure(bs):
+        raise torch.OutOfMemoryError("CUDA out of memory (pretend)")
+
+    with pytest.raises(torch.OutOfMemoryError):
+        run_with_smaller_batches(measure, 2)

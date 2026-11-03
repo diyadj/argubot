@@ -52,6 +52,10 @@ fi
 module purge
 module load Python/3.11.11-GCCcore-13.3.0     # the venv's base Python (pyvenv.cfg); provides libpython3.11
 source "$VENV/bin/activate"
+# Lets PyTorch grow its memory blocks instead of leaving gaps it cannot reuse. Qwen's big
+# vocabulary asks for a few GB at a time, and without this a 24 GB card ran out with 5 GB
+# reserved but unused. It changes how memory is handed out, not any result.
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # The fast Qwen3.5 Gated DeltaNet kernel (about 10x faster). Best effort: training still works without it.
 python3 -c "import fla" 2>/dev/null || pip install -q flash-linear-attention==0.5.2 \

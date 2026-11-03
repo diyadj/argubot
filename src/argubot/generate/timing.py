@@ -86,6 +86,7 @@ def timing_report(
     train_losses: Sequence[float],
     peak_memory_gb: Optional[float],
     fla_installed: bool,
+    notes: Sequence[str] = (),
 ) -> Dict[str, Any]:
     step = typical_step_seconds(step_seconds)
     projections = [
@@ -94,8 +95,11 @@ def timing_report(
     ]
     configured = next(p for p in projections if p["epochs"] == int(configured_epochs))
     fits = [p["epochs"] for p in projections if p["jobs"] == 1 and p["epochs"] < configured_epochs]
-    warnings: List[str] = []
-    if not train_losses or not all(math.isfinite(x) for x in train_losses):
+    warnings: List[str] = list(notes)
+    if not train_losses:
+        warnings.append("No training loss was logged, so there is no check that it stays finite. Run the "
+                        "timing test again with more steps before starting the full run.")
+    elif not all(math.isfinite(x) for x in train_losses):
         warnings.append("The training loss is not finite (NaN or inf). Do not start the full run: check "
                         "training.precision (bf16 on a cluster card) before anything else.")
     if peak_memory_gb and gpu_memory_gb and peak_memory_gb > 0.92 * gpu_memory_gb:

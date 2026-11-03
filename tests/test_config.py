@@ -49,6 +49,9 @@ def test_the_bigger_configs_change_only_the_model_precision_and_output_folders(p
         "generator.dtype",
         "generator.fallback_model",
         "training.precision",
+        "training.per_device_batch_size",
+        "training.grad_accum_steps",
+        "training.eval_batch_size",
     }
     assert bigger["generator.base_model"] == model
     assert bigger["training.precision"] == "bf16"
@@ -101,3 +104,10 @@ def test_a_missing_parent_says_where_it_looked(tmp_path):
     (tmp_path / "c.yaml").write_text("extends: nowhere.yaml\n")
     with pytest.raises(FileNotFoundError, match="repo root"):
         load_config(str(tmp_path / "c.yaml"))
+
+
+def test_every_run_trains_with_the_same_effective_batch_of_16():
+    for path in (BASE, FOUR_B, TWO_B):
+        t = load_config(str(path))["training"]
+        assert t["per_device_batch_size"] * t["grad_accum_steps"] == 16, path.name
+        assert (t["eval_batch_size"] or t["per_device_batch_size"]) <= t["per_device_batch_size"], path.name

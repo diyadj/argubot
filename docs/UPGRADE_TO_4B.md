@@ -22,7 +22,8 @@ Only the model, the precision and the output folders. `configs/config_4b.yaml` b
 | Generation precision | auto (bf16, what transformers loads by default) | bf16 |
 | Adapter | `outputs/adapter` (link to scratch) | `outputs/adapter_4b` |
 | Transcripts / results / rating sheets | `outputs/transcripts`, `results`, `human_eval` | the same names with `_4b` |
-| Data, prompts, LoRA r16/alpha32, lr 2e-4, 3 epochs, batch 16, warmup 0, decoding, BM25, test debates | same | same |
+| Batch (per GPU x accumulation) | 4 x 4 | 2 x 8, the same 16 per step; 4 did not fit next to the 4B weights on a 24 GB card |
+| Data, prompts, LoRA r16/alpha32, lr 2e-4, 3 epochs, effective batch 16, warmup 0, decoding, BM25, test debates | same | same |
 
 About warmup: the config used to say 0.03, but transformers 5.x renamed that setting and the
 old training code dropped it with only a one-line note, so the 0.8B adapter was trained with no
@@ -36,7 +37,8 @@ instead of disappearing.
 - **A clean stop before the 24 h limit.** Slurm warns the job 20 minutes early; it saves a
   checkpoint, stops, and submits itself again (at most three times).
 - **Out of memory?** It retries with half the batch and twice the accumulation, so the effective
-  batch stays 16 whether the job lands on a 3090 (24 GB) or an A40/L40S (48 GB).
+  batch stays 16 whether the job lands on a 3090 (24 GB) or an A40/L40S (48 GB). The validation
+  passes step down to a smaller batch the same way.
 - **Preflight checks.** Every job checks its inputs first and stops in seconds if something is
   missing, instead of after loading a 9 GB model.
 - **Nothing gets mixed up.** The 0.8B adapter cannot be loaded on the 4B model or the other way
@@ -171,7 +173,8 @@ Watch it with `myqueue` and `tail -f CS425G3.<jobid>.out`. Things you will see:
 
 - `Starting from scratch, checkpoints go to outputs/checkpoints_4b`, or `Resuming from ...` on a later job.
 - A loss line every 10 steps. It should stay finite and drift down. The 0.8B adapter ended at a
-  validation loss of about 2.95 (perplexity 19.15), so 4B should end at or below that.
+  validation loss of 2.968 after its first epoch (its best) and 3.074 after the third (perplexity 21.6),
+  so 4B should land below those.
 - An eval loss at the end of each epoch.
 - If it gets near 24 h: `Got signal 10: saving a checkpoint ...`, then `Submitted the next job`.
 - At the end: the `RECORD FOR REPORT` lines and the validation perplexity.
@@ -271,7 +274,7 @@ sbatch --time=01:00:00 scripts/violet_train.sbatch configs/config_2b.yaml --timi
 | `checkpoints ... were made with different settings` | The config changed since the checkpoints were saved. Put it back, or move `outputs/checkpoints_4b` away to start over. |
 | `The adapter in ... was trained on ...` | The adapter and the config do not match. Use the config that goes with that adapter. |
 | `cannot do bf16` | The job got an old card. Resubmit with `--constraint` for a 3090, A40 or L40S. |
-| `Out of GPU memory ... Retrying at 2 x 8` | Normal on a 24 GB card. Nothing to do. |
+| `Out of GPU memory ... Retrying at 1 x 16` or `Trying again with batch 1` | The card is full. It carries on with a smaller batch. Nothing to do. |
 | `Could not resubmit (two jobs already queued?)` | The group already has two jobs queued. When one clears, run the command the log prints. |
 | Loss is `nan` | Stop the job (`scancel <jobid>`) and send the log over. |
 | A job is stuck pending for hours | Someone else's job (or ours) holds the one slot. `myqueue` shows which. |
@@ -279,7 +282,7 @@ sbatch --time=01:00:00 scripts/violet_train.sbatch configs/config_2b.yaml --timi
 ## For the report
 
 - Why the second model: the floor-effect argument above, and that the scale comparison changes nothing but the model.
-- From `outputs/adapter_4b/training_summary.json`: trainable parameters, training time and GPU, batch per device times accumulation, validation perplexity next to the 0.8B one (19.15). Same tokenizer, so the two perplexities are comparable.
+- From `outputs/adapter_4b/training_summary.json`: trainable parameters, training time and GPU, batch per device times accumulation, validation perplexity next to the 0.8B one (21.64; 19.45 after its best epoch, see `docs/DATA_NOTES.md`). Same tokenizer, so the two perplexities are comparable.
 - From `outputs/timing/`: seconds per step on each card, if we compare costs.
 - The precision difference (fp16 for 0.8B, bf16 for 4B) and the warmup note above.
 - Results tables for both models side by side, the C1 against B row being the one that matters.

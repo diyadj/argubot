@@ -173,3 +173,15 @@ def test_eval_stage_needs_all_five_systems(tmp_path):
     assert failed(check_stage(cfg, "eval"))
     (tdir / "D.jsonl").write_text("{}\n" * n)
     assert not failed(check_stage(cfg, "eval"))
+    (tdir / "D.jsonl").write_text("{}\n" * (n + 1))
+    assert failed(check_stage(cfg, "eval"))       # systems disagree on the debates
+
+
+def test_eval_stage_only_warns_for_a_short_check_run(tmp_path):
+    cfg = _cfg(tmp_path, test_dialogues=str(ROOT / "data/toy/toy_dialogues.jsonl"))
+    tdir = Path(cfg["paths"]["transcripts_dir"])
+    tdir.mkdir(parents=True)
+    for s in ("A", "B", "C1", "C2", "D"):
+        (tdir / f"{s}.jsonl").write_text("{}\n")
+    checks = check_stage(cfg, "eval")
+    assert not failed(checks) and "WARN" in _statuses(checks, "transcripts")

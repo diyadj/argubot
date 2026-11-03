@@ -165,16 +165,22 @@ def check_stage(
 
     if stage == "eval":
         tdir = transcripts_dir or paths["transcripts_dir"]
-        expected = limit or (_count_lines(paths["test_dialogues"]) if _exists(paths["test_dialogues"]) else None)
         progress = transcript_progress(tdir)
         missing = [s for s, n in progress.items() if n is None]
-        wrong = [f"{s} ({n}/{expected})" for s, n in progress.items() if n is not None and expected and n != expected]
+        counts = {n for n in progress.values() if n is not None}
+        full = _count_lines(paths["test_dialogues"]) if _exists(paths["test_dialogues"]) else None
         if missing:
             add("FAIL", "transcripts", f"{tdir} has no transcripts for {missing}. Run the systems first")
-        elif wrong:
-            add("FAIL", "transcripts", f"{tdir} has the wrong number of debates in {wrong}")
+        elif len(counts) > 1:
+            add("FAIL", "transcripts", f"the systems in {tdir} have different numbers of debates: {progress}. "
+                "A paired comparison needs the same debates for every system")
         else:
-            add("OK", "transcripts", f"all five systems in {tdir}, {expected} debates each")
+            n = counts.pop()
+            if full is not None and n != full and not limit:
+                add("WARN", "transcripts", f"{n} debates per system in {tdir}, not the full {full}. "
+                    "Fine for a check run, not for the report")
+            else:
+                add("OK", "transcripts", f"all five systems in {tdir}, {n} debates each")
         strict = cfg["eval"]["strict"]["nli_model"]
         add("OK" if model_in_cache(strict) else "WARN", "strict-metric NLI model", strict)
 

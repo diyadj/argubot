@@ -40,7 +40,7 @@ Run these from the repo root. This is also the draft of the report's "how to run
 3. `python scripts/build_indexes.py` builds the passage files and the BM25 index (about 4 minutes).
 4. `python scripts/build_training_data.py` fills the claim and evidence slots for training.
 5. `python scripts/make_test_debates.py` picks the 100 scripted test debates.
-6. `python scripts/train_lora.py` trains the adapter (or use `notebooks/02_train.ipynb`).
+6. `python scripts/train_lora.py --config <config>` trains the adapter (or use `notebooks/02_train.ipynb`). On the cluster use `sbatch scripts/violet_train.sbatch <config>`, which checkpoints, stops before the time limit and resubmits itself.
 7. `python scripts/run_systems.py` runs A, B, C1, C2 and D on the test debates. Add `--limit 3 --out outputs/check3` for a quick check.
 8. `python scripts/evaluate.py --human` computes contradiction rate, guardrails and bootstrap intervals against system A, with the real CMV replies as a reference row. Add `--baseline B` for the core test (C1 against B) and `--threshold 0.8` for the sensitivity check. Flagged contradiction pairs go to `outputs/results/flagged_<system>.jsonl`. `--strict` uses the strict metric instead (only real assertions against self-contained sentences on the same subject, both NLI directions agreeing, a different NLI model from the reranker's); its two cut-offs come from `python scripts/calibrate_strict_metric.py`, which uses no system output, and `python scripts/make_precision_sheet.py` builds a blinded sheet to measure how many of its flags are real.
 9. `python scripts/make_rating_sheets.py` writes blinded sheets for the two human raters.
@@ -49,6 +49,10 @@ Run these from the repo root. This is also the draft of the report's "how to run
 12. `python scripts/serve_demo.py` opens the chat demo for the presentation (pick a system, see the claim log and retrieved passages next to each reply).
 
 Steps 1 to 5 are already done: the test debates and training examples are committed, and the passages, indexes and trained adapter are on the SCIS cluster scratch. On the cluster, link them in (`docs/DATA_NOTES.md`, "Built files on the SCIS cluster" and "Trained LoRA adapter"), then run step 7 as a batch job with `sbatch scripts/violet_run.sbatch` (each system is saved as it finishes, and resubmitting carries on where it stopped). See `docs/RUN_ON_VIOLET.md` for first-time cluster setup.
+
+## The 4B run
+
+A second adapter on Qwen3.5-4B-Base, with everything else unchanged, to see whether the claim log matters more with a stronger generator. `configs/config_4b.yaml` builds on `configs/config.yaml` and only swaps the model, the precision (bf16) and the output folders (`outputs/*_4b`), so it can never overwrite the 0.8B files. Pass `--config configs/config_4b.yaml` to any script, or set `CONFIG_PATH` in the notebooks. `configs/config_2b.yaml` is the same with Qwen3.5-2B-Base, in case 4B is too slow. The step by step plan, with the cluster commands and what to do when something goes wrong, is in `docs/UPGRADE_TO_4B.md`. Before any job, `python scripts/preflight.py --config <config> --stage <timing|train|run|eval|demo>` checks that everything it needs is there.
 
 ## What is finished and what is not
 
@@ -68,7 +72,8 @@ Steps 1 to 5 are already done: the test debates and training examples are commit
 | IBM-ArgQ backup index and fallback | Built and tested, switched off (`retrieval.use_backup: false`), see `docs/DATA_NOTES.md` |
 | Retrieval-stance test on the 71 motions | Done: `scripts/eval_retrieval_stance.py` (BM25 and dense), results in `docs/DATA_NOTES.md` |
 | Stance alignment | Done as a tested utility, not wired into the pipeline |
-| Training run | Done: full data, 3 epochs, validation perplexity 19.15; adapter on the cluster scratch (`docs/DATA_NOTES.md`) |
+| Training run | Done: full data, 3 epochs, validation perplexity 19.15; adapter on the cluster scratch (`docs/DATA_NOTES.md`). Trained without warmup (transformers 5.x dropped the setting; see `docs/UPGRADE_TO_4B.md`) |
+| 4B run | Ready to run: config, bf16, checkpoints and resume, timing test, preflight checks (`docs/UPGRADE_TO_4B.md`) |
 | Notebooks | Done, see `notebooks/README.md` |
 | Five-system run, evaluation, human ratings | Next: 3-debate check, then the 100-debate run |
 | Training data builder | Done and tested, needs `build_indexes.py` first |
@@ -77,7 +82,8 @@ Steps 1 to 5 are already done: the test debates and training examples are commit
 ## Layout
 
 ```
-configs/config.yaml     every setting, nothing hardcoded elsewhere
+configs/config.yaml     every setting, nothing hardcoded elsewhere (the 0.8B run)
+configs/config_4b.yaml  the 4B run: only the model, precision and output folders differ (config_2b.yaml likewise)
 src/argubot/            the package (prompt, claims, retrieval, nli, generate, systems, eval, data)
 scripts/                one command per stage of the project
 web/                    the chat demo: index.html is built from the React source in web/app/

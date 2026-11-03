@@ -127,6 +127,19 @@ chmod -R g+rX "$S/outputs/adapter"
 sha256sum "$S/outputs/adapter"/* > "$S/outputs/adapter/SHA256SUMS"
 ```
 
+One thing to say in the report about this adapter: it was trained with no learning-rate warmup.
+The config said `warmup_ratio: 0.03`, but transformers 5.x renamed that setting to `warmup_steps`,
+and the training code at the time skipped settings it did not recognise with a one-line note. The
+config now says 0.0 to match what happened, and the code passes warmup through properly.
+
+## The 4B adapter
+
+Trained with `configs/config_4b.yaml` (`docs/UPGRADE_TO_4B.md`). It lives in `~/argubot/outputs/adapter_4b`
+on the group login, with a copy in `$S/outputs/adapter_4b` in scratch, and carries its own
+`training_summary.json` (precision, batch, training time over all jobs, eval loss per epoch,
+validation perplexity). It only works on top of `Qwen/Qwen3.5-4B-Base`; the generator refuses to
+load it on any other base model.
+
 ## How to reproduce
 
 ```

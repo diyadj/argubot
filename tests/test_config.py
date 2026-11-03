@@ -10,6 +10,8 @@ from argubot.config import flatten, load_config, merge_configs
 ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "configs" / "config.yaml"
 FOUR_B = ROOT / "configs" / "config_4b.yaml"
+TWO_B = ROOT / "configs" / "config_2b.yaml"
+OUTPUT_KEYS = ("adapter_dir", "checkpoint_dir", "transcripts_dir", "results_dir", "rating_dir")
 
 
 @pytest.fixture(autouse=True)
@@ -31,11 +33,12 @@ def test_the_main_config_keeps_the_settings_the_0_8b_adapter_was_trained_and_run
     assert cfg["paths"]["adapter_dir"] == "outputs/adapter"
 
 
-def test_the_4b_config_changes_only_the_model_precision_and_output_folders():
+@pytest.mark.parametrize("path,model", [(FOUR_B, "Qwen/Qwen3.5-4B-Base"), (TWO_B, "Qwen/Qwen3.5-2B-Base")])
+def test_the_bigger_configs_change_only_the_model_precision_and_output_folders(path, model):
     base = dict(flatten(load_config(str(BASE))))
-    four_b = dict(flatten(load_config(str(FOUR_B))))
-    assert set(base) == set(four_b)
-    changed = {k for k in base if base[k] != four_b[k]}
+    bigger = dict(flatten(load_config(str(path))))
+    assert set(base) == set(bigger)
+    changed = {k for k in base if base[k] != bigger[k]}
     assert changed == {
         "paths.adapter_dir",
         "paths.checkpoint_dir",
@@ -47,17 +50,17 @@ def test_the_4b_config_changes_only_the_model_precision_and_output_folders():
         "generator.fallback_model",
         "training.precision",
     }
-    assert four_b["generator.base_model"] == "Qwen/Qwen3.5-4B-Base"
-    assert four_b["training.precision"] == "bf16"
-    assert four_b["generator.fallback_model"] is None
+    assert bigger["generator.base_model"] == model
+    assert bigger["training.precision"] == "bf16"
+    assert bigger["generator.fallback_model"] is None
 
 
-def test_the_4b_run_never_writes_into_a_0_8b_folder():
-    base = load_config(str(BASE))["paths"]
-    four_b = load_config(str(FOUR_B))["paths"]
-    for key in ("adapter_dir", "checkpoint_dir", "transcripts_dir", "results_dir", "rating_dir"):
-        a, b = Path(base[key]), Path(four_b[key])
-        assert a != b and a not in b.parents and b not in a.parents, key
+def test_no_two_runs_ever_write_into_the_same_folder():
+    runs = {p.name: load_config(str(p))["paths"] for p in (BASE, FOUR_B, TWO_B)}
+    folders = [(name, key, Path(paths[key])) for name, paths in runs.items() for key in OUTPUT_KEYS]
+    for i, (n1, k1, a) in enumerate(folders):
+        for n2, k2, b in folders[i + 1:]:
+            assert a != b and a not in b.parents and b not in a.parents, (n1, k1, n2, k2)
 
 
 def test_a_copied_config_still_loads_from_the_repo_root(tmp_path):

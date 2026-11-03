@@ -1,0 +1,20 @@
+# Fallback if the 4B timing test says NO GO: Qwen3.5-2B-Base, set up exactly like the 4B run
+# (bf16, its own output folders, no GPT-2 fallback). Use it the same way, with
+# --config configs/config_2b.yaml (see docs/UPGRADE_TO_4B.md, "If 4B is too slow").
+
+extends: configs/config.yaml
+
+paths:
+  adapter_dir: outputs/adapter_2b
+  checkpoint_dir: outputs/checkpoints_2b
+  transcripts_dir: outputs/transcripts_2b
+  results_dir: outputs/results_2b
+  rating_dir: outputs/human_eval_2b
+
+generator:
+  base_model: Qwen/Qwen3.5-2B-Base
+  dtype: bfloat16
+  fallback_model: null
+
+training:
+  precision: bf16

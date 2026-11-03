@@ -52,6 +52,7 @@ def test_the_bigger_configs_change_only_the_model_precision_and_output_folders(p
         "training.per_device_batch_size",
         "training.grad_accum_steps",
         "training.eval_batch_size",
+        "training.num_epochs",
     }
     assert bigger["generator.base_model"] == model
     assert bigger["training.precision"] == "bf16"

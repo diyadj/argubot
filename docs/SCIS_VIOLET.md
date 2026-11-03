@@ -118,22 +118,24 @@ writes `notebook.output.<timestamp>.ipynb` when finished. Check progress with `m
 
 ---
 
-## 5. Path B — headless training with sbatch
+## 5. Path B: headless training with sbatch
 
-Once `train()` in `src/argubot/generate/training.py` is implemented:
-
-1. Edit the four marked lines in [`scripts/violet_train.sbatch`](../scripts/violet_train.sbatch) with your `myinfo`
-   values (`--partition`, `--account`, `--qos`, `--mail-user`).
-2. Submit it:
+[`scripts/violet_train.sbatch`](../scripts/violet_train.sbatch) runs `scripts/train_lora.py` in the
+group venv. It needs a config, so nobody retrains the 0.8B adapter by accident:
 
 ```bash
-chmod +x scripts/violet_train.sbatch
-sbatch scripts/violet_train.sbatch
+sbatch --time=01:00:00 scripts/violet_train.sbatch configs/config_4b.yaml --timing-test 30
 ```
 
-The adapter is saved to `outputs/adapter` (from `configs/config.yaml`). Logs land in
-`<USERNAME>.<JOBID>.out` in the directory you ran `sbatch` from. The first run creates a conda env and
-installs dependencies, so it is slower; later runs reuse the env.
+```bash
+sbatch scripts/violet_train.sbatch configs/config_4b.yaml
+```
+
+The first is a 30-step timing test that projects the full run; the second is the full run. It saves
+a checkpoint every 100 steps, stops cleanly 20 minutes before the 24 h limit and resubmits itself,
+and checks its inputs first (`scripts/preflight.py`). The adapter goes to the config's
+`paths.adapter_dir`. Logs land in `<USERNAME>.<JOBID>.out` in the directory you ran `sbatch` from.
+The full plan for the 4B run is in [UPGRADE_TO_4B.md](UPGRADE_TO_4B.md).
 
 ## 6. Bring results back to your laptop
 

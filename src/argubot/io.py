@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator
 
@@ -20,10 +21,14 @@ def read_jsonl(path: str) -> Iterator[Dict[str, Any]]:
 
 
 def write_jsonl(path: str, rows: Iterable[Dict[str, Any]]) -> int:
+    """Write to a temporary file first and rename it at the end, so a job killed halfway through
+    never leaves a partial file that a later step would mistake for a finished one."""
     Path(path).parent.mkdir(parents=True, exist_ok=True)
+    tmp = f"{path}.tmp"
     count = 0
-    with open(path, "w", encoding="utf-8") as f:
+    with open(tmp, "w", encoding="utf-8") as f:
         for row in rows:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
             count += 1
+    os.replace(tmp, path)
     return count

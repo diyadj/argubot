@@ -1,0 +1,24 @@
+# The Qwen3.5-4B-Base run. Everything not listed here comes from config.yaml, so the 4B run
+# differs from the 0.8B run only in the model, the precision and where its files go. Same data,
+# prompts, LoRA settings, epochs, decoding, retrieval and test debates, so any difference in the
+# results comes from the model size.
+#
+# Pass it to any script with --config configs/config_4b.yaml (see docs/UPGRADE_TO_4B.md).
+
+extends: configs/config.yaml
+
+paths:
+  # Separate folders, so nothing from the 0.8B run (including the shared adapter link) is overwritten.
+  adapter_dir: outputs/adapter_4b
+  checkpoint_dir: outputs/checkpoints_4b
+  transcripts_dir: outputs/transcripts_4b
+  results_dir: outputs/results_4b
+  rating_dir: outputs/human_eval_4b
+
+generator:
+  base_model: Qwen/Qwen3.5-4B-Base
+  dtype: bfloat16       # 8 GB of weights in bf16; float32 would need 16 GB
+  fallback_model: null  # never swap in GPT-2 on an unattended 4B job, stop with an error instead
+
+training:
+  precision: bf16       # bf16 does not overflow the way fp16 can on a bigger model

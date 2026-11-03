@@ -51,6 +51,7 @@ def load_components(cfg: Dict[str, Any], dummy: bool = False) -> Tuple[Generator
         temperature=d["temperature"],
         top_p=d["top_p"],
         max_prompt_tokens=cfg["training"]["max_seq_len"],
+        dtype=cfg["generator"].get("dtype"),
     )
     passages = [Passage.from_dict(x) for x in read_jsonl(cfg["paths"]["passages"])]
     retriever = build_retriever(cfg, passages)

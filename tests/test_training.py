@@ -71,7 +71,7 @@ def test_train_runs_end_to_end_on_toy_data(tmp_path):
     cfg["paths"]["val_examples"] = toy
     cfg["paths"]["adapter_dir"] = str(tmp_path / "adapter")
     cfg["training"].update(
-        num_epochs=1, per_device_batch_size=2, grad_accum_steps=1, max_seq_len=64, fp16=False
+        num_epochs=1, per_device_batch_size=2, grad_accum_steps=1, max_seq_len=64, precision="fp32"
     )
 
     try:

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from pathlib import Path
 from typing import Any, List, Optional, Protocol, Sequence
 
@@ -58,8 +59,22 @@ def torch_dtype_from_name(name: Optional[str]) -> Any:
 
 
 def _model_id_tail(name: str) -> str:
-    """'Qwen/Qwen3.5-4B-Base', '/cache/.../Qwen3.5-4B-Base/' and 'Qwen3.5-4B-Base' all give 'qwen3.5-4b-base'."""
-    return Path(str(name).rstrip("/\\")).name.lower()
+    """The model's own name, lower case, from a hub id, a local folder or a Hugging Face cache path.
+
+    'Qwen/Qwen3.5-4B-Base', '/scratch/Qwen3.5-4B-Base/' and
+    '~/.cache/huggingface/hub/models--Qwen--Qwen3.5-4B-Base/snapshots/<hash>' all give 'qwen3.5-4b-base'.
+    """
+    parts = Path(str(name).rstrip("/\\")).parts
+    for part in reversed(parts):
+        if part.startswith("models--"):
+            return part.split("--")[-1].lower()
+    return parts[-1].lower() if parts else ""
+
+
+def _size_tag(name: str) -> Optional[str]:
+    """'0.8b', '4b', '2b' and so on, or None when the name carries no size."""
+    match = re.search(r"(?<![\d.])(\d+(?:\.\d+)?)b(?![a-z])", _model_id_tail(name))
+    return match.group(1) if match else None
 
 
 def adapter_base_model(adapter_dir: str) -> Optional[str]:
@@ -83,12 +98,18 @@ def check_adapter_matches(adapter_dir: str, base_model: str) -> None:
             "in from scratch (docs/DATA_NOTES.md, 'Trained LoRA adapter on the cluster')."
         )
     trained_on = adapter_base_model(adapter_dir)
-    if trained_on and _model_id_tail(trained_on) != _model_id_tail(base_model):
+    if not trained_on or _model_id_tail(trained_on) == _model_id_tail(base_model):
+        return
+    a, b = _size_tag(trained_on), _size_tag(base_model)
+    if a and b and a != b:
         raise ValueError(
             f"The adapter in {adapter_dir} was trained on {trained_on}, but generator.base_model is "
             f"{base_model}. Use the config that matches the adapter (configs/config.yaml for 0.8B, "
             "configs/config_4b.yaml for 4B)."
         )
+    # Names differ but the sizes do not clearly clash (an unusual local path, say): carry on, loudly.
+    print(f"Note: the adapter in {adapter_dir} names its base model {trained_on!r}, which does not look "
+          f"like {base_model!r}. Loading it anyway; check this is the right adapter.")
 
 
 class HFGenerator:

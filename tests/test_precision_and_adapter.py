@@ -85,3 +85,20 @@ def test_the_0_8b_adapter_on_the_4b_model_is_refused(tmp_path):
 def test_a_missing_adapter_says_how_to_get_one(tmp_path):
     with pytest.raises(FileNotFoundError, match="Train it first"):
         check_adapter_matches(str(tmp_path / "nothing_here"), "Qwen/Qwen3.5-4B-Base")
+
+
+def test_an_adapter_whose_base_was_recorded_as_a_cache_path_passes(tmp_path):
+    d = _adapter(tmp_path, "/home/u/.cache/huggingface/hub/models--Qwen--Qwen3.5-0.8B-Base/snapshots/abc123")
+    check_adapter_matches(d, "Qwen/Qwen3.5-0.8B-Base")
+
+
+def test_the_4b_adapter_on_the_2b_model_is_refused(tmp_path):
+    d = _adapter(tmp_path, "Qwen/Qwen3.5-4B-Base")
+    with pytest.raises(ValueError):
+        check_adapter_matches(d, "Qwen/Qwen3.5-2B-Base")
+
+
+def test_an_unrecognisable_base_name_only_warns(tmp_path, capsys):
+    d = _adapter(tmp_path, "/scratch/some_folder")
+    check_adapter_matches(d, "Qwen/Qwen3.5-0.8B-Base")
+    assert "Loading it anyway" in capsys.readouterr().out

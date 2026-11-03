@@ -134,6 +134,33 @@ class TrainResult:
     device: str
 
 
+PRECISIONS = ("bf16", "fp16", "fp32")
+
+
+def resolve_precision(training_cfg: Dict[str, Any], cuda_available: bool, bf16_supported: bool) -> str:
+    """Pick 'bf16', 'fp16' or 'fp32' for this run from training.precision.
+
+    Older configs had `fp16: true/false` instead, so that is still understood. Without a GPU
+    everything runs in fp32 (CPU tests). Asking for bf16 on a card that cannot do it (a T4 or a
+    V100) is an error rather than a quiet switch to fp16, because fp16 is exactly what we are
+    trying to avoid on the bigger model, and finding out after ten hours of NaNs is worse.
+    """
+    wanted = training_cfg.get("precision")
+    if wanted is None:
+        wanted = "fp16" if training_cfg.get("fp16") else "fp32"
+    wanted = str(wanted).lower()
+    if wanted not in PRECISIONS:
+        raise ValueError(f"training.precision must be one of {PRECISIONS}, got {wanted!r}")
+    if not cuda_available:
+        return "fp32"
+    if wanted == "bf16" and not bf16_supported:
+        raise RuntimeError(
+            "training.precision is bf16 but this GPU cannot do bf16 (a T4 or V100). Ask for an RTX 3090, "
+            "A40, L40S or H100 (sbatch --constraint), or set training.precision: fp16 in the config."
+        )
+    return wanted
+
+
 def _load_base(model_name: str, dtype):
     """Load tokenizer + causal LM, tolerant of the torch_dtype -> dtype rename and a missing pad token."""
     from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -191,17 +218,23 @@ def train(cfg: Dict[str, Any]) -> "TrainResult":
     set_seed(cfg["seed"])
     t = cfg["training"]
     paths = cfg["paths"]
-    use_fp16 = bool(t["fp16"]) and torch.cuda.is_available()   # a T4 has no bf16
-    dtype = torch.float16 if use_fp16 else torch.float32
+    cuda = torch.cuda.is_available()
+    precision = resolve_precision(t, cuda, cuda and torch.cuda.is_bf16_supported())
+    dtype = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32}[precision]
+    print(f"precision: {precision}" + (f" on {torch.cuda.get_device_name(0)}" if cuda else " (no GPU)"))
 
-    # 1. Base model + tokenizer, falling back if the configured model will not load.
+    # 1. Base model + tokenizer, falling back if the configured model will not load
+    #    (only when the config names a fallback; the 4B config does not).
     model_name = cfg["generator"]["base_model"]
+    fallback = cfg["generator"].get("fallback_model")
     try:
         tokenizer, model = _load_base(model_name, dtype)
     except Exception as e:  # noqa: BLE001 - report and fall back rather than crash the run
+        if not fallback:
+            raise
         print(f"Could not load {model_name!r}: {type(e).__name__}: {e}")
-        model_name = cfg["generator"]["fallback_model"]
-        print(f"Falling back to {model_name!r} -- tell the group.")
+        model_name = fallback
+        print(f"Falling back to {model_name!r}. Tell the group.")
         tokenizer, model = _load_base(model_name, dtype)
 
     # GPT-2 names its attention projection c_attn; all-linear is for Qwen3.5.
@@ -209,9 +242,10 @@ def train(cfg: Dict[str, Any]) -> "TrainResult":
         cfg = {**cfg, "lora": {**cfg["lora"], "target_modules": ["c_attn"]}}
         print("GPT-2 detected: using target_modules=['c_attn'].")
 
-    # 2. LoRA. Keep trainable params in fp32 so fp16 training does not hit the unscale error.
+    # 2. LoRA. Keep trainable params in fp32 under fp16 or bf16: fp16 needs it to avoid the
+    #    "unscale FP16 gradients" error, and bf16 has too few mantissa bits for small LoRA updates.
     model = get_peft_model(model, build_lora_config(cfg))
-    if use_fp16:
+    if precision != "fp32":
         for p in model.parameters():
             if p.requires_grad:
                 p.data = p.data.float()
@@ -251,7 +285,8 @@ def train(cfg: Dict[str, Any]) -> "TrainResult":
         learning_rate=float(t["learning_rate"]),
         num_train_epochs=t["num_epochs"],
         warmup_ratio=t["warmup_ratio"],
-        fp16=use_fp16,
+        fp16=precision == "fp16",
+        bf16=precision == "bf16",
         logging_steps=10,
         save_strategy="no",           # the adapter is saved by hand at the end, not as checkpoints
         report_to="none",

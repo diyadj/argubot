@@ -16,6 +16,7 @@ paths:
   passages: data/processed/passages.jsonl              # args.me, the main index
   passages_backup: data/processed/passages_ibm_argq.jsonl  # IBM-ArgQ, kept apart so it cannot crowd out args.me
   adapter_dir: outputs/adapter
+  checkpoint_dir: outputs/checkpoints   # training checkpoints for resuming a stopped job, cleared once the adapter is saved
   transcripts_dir: outputs/transcripts
   results_dir: outputs/results
   rating_dir: outputs/human_eval
@@ -47,6 +48,9 @@ prompt:
 
 generator:
   base_model: Qwen/Qwen3.5-0.8B-Base
+  # Precision the model is loaded in for generation: auto, bfloat16, float16 or float32.
+  # auto means "whatever the model ships in" (bf16 for Qwen3.5), which is what every 0.8B run so far used.
+  dtype: auto
   # Approved by the professor earlier. For gpt2-medium set lora.target_modules to [c_attn]
   # and training.max_seq_len to 1024 or lower (its context window).
   fallback_model: gpt2-medium
@@ -64,10 +68,17 @@ training:
   learning_rate: 2.0e-4
   num_epochs: 3
   warmup_ratio: 0.03
-  fp16: true                      # a T4 has no bf16. Watch for NaNs and fall back to fp32 if needed.
+  # fp16, bf16 or fp32. The 0.8B adapter was trained in fp16 because a Colab T4 has no bf16.
+  # Any cluster card (3090, A40, L40S, H100) can do bf16, which is safer for bigger models.
+  precision: fp16
   p_blank_claims: 0.25            # slot blanking so one adapter serves all five systems
   p_blank_evidence: 0.25
   max_train_examples: null        # set a number if the full set will not fit in the Colab time limit
+  # Checkpoints, so a job that hits the 24 h limit or gets preempted can carry on where it stopped.
+  save_steps: 100                 # optimizer steps between checkpoints (each step = one effective batch of 16)
+  save_total_limit: 2             # keep only the newest two checkpoints
+  resume: true                    # pick up from the newest checkpoint in paths.checkpoint_dir if there is one
+  oom_fallback: true              # on out-of-memory, halve the batch and double grad_accum (same effective batch)
 
 decoding:
   temperature: 0.8

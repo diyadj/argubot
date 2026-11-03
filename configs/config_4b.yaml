@@ -1,7 +1,7 @@
 # The Qwen3.5-4B-Base run. Everything not listed here comes from config.yaml, so the 4B run
-# differs from the 0.8B run only in the model, the precision and where its files go. Same data,
-# prompts, LoRA settings, epochs, decoding, retrieval and test debates, so any difference in the
-# results comes from the model size.
+# differs from the 0.8B run only in the model, the precision, the number of epochs, how the batch
+# of 16 is split, and where its files go. Same data, prompts, LoRA settings, learning rate,
+# decoding, retrieval and test debates.
 #
 # Pass it to any script with --config configs/config_4b.yaml (see docs/UPGRADE_TO_4B.md).
 
@@ -29,3 +29,7 @@ training:
   per_device_batch_size: 2
   grad_accum_steps: 8
   eval_batch_size: 2
+  # One epoch, not three. The 0.8B run's validation loss was lowest after its first epoch and rose
+  # after it (docs/DATA_NOTES.md), and a bigger model overfits a dataset this size sooner. The
+  # proposal tunes hyperparameters on the validation split, so this is that, and it says so in the report.
+  num_epochs: 1

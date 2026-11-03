@@ -12,8 +12,9 @@ steps are ordered to keep that one GPU busy without anyone waiting on it.
 
 ## What differs between the two runs
 
-Only the model, the precision and the output folders. `configs/config_4b.yaml` builds on
-`configs/config.yaml` and changes nothing else, and a test checks that.
+The model, the precision, the number of epochs, how the batch is split, and the output folders.
+`configs/config_4b.yaml` builds on `configs/config.yaml` and changes nothing else, and a test
+checks that.
 
 | | 0.8B (`configs/config.yaml`) | 4B (`configs/config_4b.yaml`) |
 | --- | --- | --- |
@@ -23,7 +24,8 @@ Only the model, the precision and the output folders. `configs/config_4b.yaml` b
 | Adapter | `outputs/adapter` (link to scratch) | `outputs/adapter_4b` |
 | Transcripts / results / rating sheets | `outputs/transcripts`, `results`, `human_eval` | the same names with `_4b` |
 | Batch (per GPU x accumulation) | 4 x 4 | 2 x 8, the same 16 per step; 4 did not fit next to the 4B weights on a 24 GB card |
-| Data, prompts, LoRA r16/alpha32, lr 2e-4, 3 epochs, effective batch 16, warmup 0, decoding, BM25, test debates | same | same |
+| Epochs | 3 | 1: the 0.8B validation loss was lowest after epoch 1 and rose after it (`docs/DATA_NOTES.md`), so for 4B we stop there. Tuned on the validation split, as the proposal says |
+| Data, prompts, LoRA r16/alpha32, lr 2e-4 (linear decay), effective batch 16, warmup 0, decoding, BM25, test debates | same | same |
 
 About warmup: the config used to say 0.03, but transformers 5.x renamed that setting and the
 old training code dropped it with only a one-line note, so the 0.8B adapter was trained with no
@@ -154,7 +156,7 @@ The same report is saved in `outputs/timing/`. What to do with it:
 | --- | --- |
 | GO | Step 3 as it is. |
 | GO, but close to the limit | Step 3 as it is. If it runs over, it saves and resubmits itself. |
-| GO with resubmits | Step 3 as it is, but it holds the GPU for that many days. If that clashes with the 0.8B work, set `training.num_epochs: 2` in `configs/config_4b.yaml` and say so in the report. |
+| GO with resubmits | Step 3 as it is, but it holds the GPU for that long. Read the 1-epoch row, since that is what the config trains. |
 | NO GO | See "If 4B is too slow" below. |
 | A WARNING about the loss not being finite | Stop. Do not start step 3. Send the log over. |
 | A WARNING about flash-linear-attention | The batch job tries to install it. If it still says MISSING, run `pip install flash-linear-attention==0.5.2` in the activated venv and repeat the timing test. |

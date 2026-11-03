@@ -25,3 +25,7 @@ training:
   per_device_batch_size: 2
   grad_accum_steps: 8
   eval_batch_size: 2
+  # One epoch, not three. The 0.8B run's validation loss was lowest after its first epoch and rose
+  # after it (docs/DATA_NOTES.md), and a bigger model overfits a dataset this size sooner. The
+  # proposal tunes hyperparameters on the validation split, so this is that, and it says so in the report.
+  num_epochs: 1

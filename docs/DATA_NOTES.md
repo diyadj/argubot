@@ -110,7 +110,7 @@ The dense index stores only vectors, in the order of `passages.jsonl`, and `Dens
 
 ## Trained LoRA adapter on the cluster
 
-The trained LoRA adapter (~62 MB: 43 MB adapter weights + the matching tokenizer) is shared in scratch at `$S/outputs/adapter`, group-readable, with its own `SHA256SUMS`. It is the full-data adapter: `Qwen/Qwen3.5-0.8B-Base` + LoRA (r16, alpha32, all-linear), trained on all 18,014 examples for 3 epochs, validation perplexity 19.15 (from `02_train.ipynb`). `outputs/` is git-ignored, so link it in on the cluster rather than committing it:
+The trained LoRA adapter (~62 MB: 43 MB adapter weights + the matching tokenizer) is shared in scratch at `$S/outputs/adapter`, group-readable, with its own `SHA256SUMS`. It is the full-data adapter: `Qwen/Qwen3.5-0.8B-Base` + LoRA (r16, alpha32, all-linear), trained on all 18,014 examples for 3 epochs, validation perplexity 21.64. That number, and the ones below, come from the saved output of the run that made this adapter (`notebooks/02_train.output.21102026132208.ipynb` on the cluster; the adapter files are stamped 21 Oct 16:26, when that run finished). An earlier version of these notes said 19.15, which matches none of that run's numbers. `outputs/` is git-ignored, so link it in on the cluster rather than committing it:
 
 ```
 S=/common/scratch/projectgrps/CS425/CS425G3/argubot_data
@@ -131,6 +131,19 @@ One thing to say in the report about this adapter: it was trained with no learni
 The config said `warmup_ratio: 0.03`, but transformers 5.x renamed that setting to `warmup_steps`,
 and the training code at the time skipped settings it did not recognise with a one-line note. The
 config now says 0.0 to match what happened, and the code passes warmup through properly.
+
+The run took 10,992 s (about 3.1 h) on an RTX 3090, and the per-epoch losses show the model
+overfitting after the first epoch: training loss keeps falling, validation loss is lowest after
+epoch 1 and rises after that. The adapter everyone uses is the epoch 3 one.
+
+| Epoch | Training loss | Validation loss | Validation perplexity |
+| --- | --- | --- | --- |
+| 1 | 2.976 | 2.968 | 19.45 |
+| 2 | 2.703 | 3.000 | 20.09 |
+| 3 | 2.533 | 3.074 | 21.63 (21.64 measured on the reply tokens afterwards) |
+
+This does not affect the comparison between the five systems, which all share this one adapter,
+but it is worth saying in the report, and it is why fewer epochs make sense for the 4B run.
 
 ## The 4B adapter
 

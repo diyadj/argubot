@@ -22,7 +22,16 @@ import time
 from pathlib import Path
 
 from argubot.config import load_config
-from argubot.generate.training import EXIT_STOPPED_EARLY, train, write_training_summary
+from argubot.generate.training import (
+    EXIT_STOPPED_EARLY,
+    run_with_smaller_batches,
+    train,
+    write_training_summary,
+)
+
+
+def _eval_batch(result) -> int:
+    return result.eval_batch_size or result.per_device_batch_size
 
 
 def validation_perplexity(result) -> float:
@@ -31,12 +40,13 @@ def validation_perplexity(result) -> float:
     from argubot.eval.metrics import perplexity
     from argubot.generate.training import ReplyOnlyCollator
 
-    loader = DataLoader(
-        result.val_dataset,
-        batch_size=result.per_device_batch_size,
-        collate_fn=ReplyOnlyCollator(result.tokenizer.pad_token_id),
-    )
-    return perplexity(result.model, loader)
+    collate = ReplyOnlyCollator(result.tokenizer.pad_token_id)
+
+    def measure(bs: int) -> float:
+        return perplexity(result.model, DataLoader(result.val_dataset, batch_size=bs, collate_fn=collate))
+
+    ppl, _ = run_with_smaller_batches(measure, _eval_batch(result), label="validation perplexity")
+    return ppl
 
 
 def eval_seconds_per_example(result, n: int = 64) -> float:
@@ -47,17 +57,21 @@ def eval_seconds_per_example(result, n: int = 64) -> float:
     from argubot.eval.metrics import perplexity
     from argubot.generate.training import ReplyOnlyCollator
 
-    bs = result.per_device_batch_size
-    n = max(bs, min(n, len(result.val_dataset)))
     collate = ReplyOnlyCollator(result.tokenizer.pad_token_id)
-    perplexity(result.model, DataLoader(Subset(result.val_dataset, range(bs)), batch_size=bs, collate_fn=collate))
-    if torch.cuda.is_available():
-        torch.cuda.synchronize()
-    start = time.time()
-    perplexity(result.model, DataLoader(Subset(result.val_dataset, range(n)), batch_size=bs, collate_fn=collate))
-    if torch.cuda.is_available():
-        torch.cuda.synchronize()
-    return (time.time() - start) / n
+
+    def measure(bs: int) -> float:
+        count = max(bs, min(n, len(result.val_dataset)))
+        perplexity(result.model, DataLoader(Subset(result.val_dataset, range(bs)), batch_size=bs, collate_fn=collate))
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        start = time.time()
+        perplexity(result.model, DataLoader(Subset(result.val_dataset, range(count)), batch_size=bs, collate_fn=collate))
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        return (time.time() - start) / count
+
+    seconds, _ = run_with_smaller_batches(measure, _eval_batch(result), label="the validation timing")
+    return seconds
 
 
 def run_timing_test(cfg, config_path: str, steps: int) -> None:
@@ -67,6 +81,15 @@ def run_timing_test(cfg, config_path: str, steps: int) -> None:
 
     result = train(cfg, max_steps=steps)
     cuda = torch.cuda.is_available()
+    notes = []
+    try:
+        eval_seconds = eval_seconds_per_example(result)
+    except Exception as e:  # noqa: BLE001 - the training numbers are still worth reporting
+        # A forward pass costs about a third of a training step, which is close enough to plan with.
+        step = sorted(result.step_seconds)[len(result.step_seconds) // 2] if result.step_seconds else 0.0
+        eval_seconds = step / (result.per_device_batch_size * result.grad_accum_steps) / 3
+        notes.append(f"Could not time validation ({type(e).__name__}), so its hours are an estimate. "
+                     "Send the log over before starting the full run.")
     report = timing_report(
         model_name=result.model_name,
         gpu=torch.cuda.get_device_name(0) if cuda else "cpu",
@@ -75,14 +98,16 @@ def run_timing_test(cfg, config_path: str, steps: int) -> None:
         per_device=result.per_device_batch_size,
         accum=result.grad_accum_steps,
         step_seconds=result.step_seconds,
-        eval_seconds_per_example=eval_seconds_per_example(result),
+        eval_seconds_per_example=eval_seconds,
         n_train=len(result.train_dataset),
         n_val=len(result.val_dataset),
         configured_epochs=int(cfg["training"]["num_epochs"]),
         train_losses=result.train_losses,
         peak_memory_gb=result.peak_memory_gb,
         fla_installed=importlib.util.find_spec("fla") is not None,
+        notes=notes,
     )
+    report["eval_batch"] = _eval_batch(result)
     print("\n" + format_report(report))
     out_dir = Path(cfg["paths"]["output_dir"]) / "timing"
     out_dir.mkdir(parents=True, exist_ok=True)

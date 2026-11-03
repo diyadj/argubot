@@ -220,6 +220,30 @@ SUMMARY = "training_summary.json"  # in the adapter folder: numbers for the repo
 _CHECKPOINT_RE = re.compile(r"^checkpoint-(\d+)$")
 
 
+def run_with_smaller_batches(fn, batch_size: int, *, label: str = "this step"):
+    """Call fn(batch_size), halving the batch each time the GPU runs out of memory.
+
+    For the forward-only passes outside the Trainer (validation perplexity, the timing test's
+    validation timing), where nothing is lost by simply trying again. Returns (result, batch_size).
+    """
+    import gc
+
+    import torch
+
+    oom_error = getattr(torch, "OutOfMemoryError", None) or torch.cuda.OutOfMemoryError
+    while True:
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        try:
+            return fn(batch_size), batch_size
+        except oom_error:
+            if batch_size <= 1:
+                raise
+        batch_size = max(1, batch_size // 2)
+        print(f"Out of GPU memory in {label}. Trying again with batch {batch_size}.", flush=True)
+
+
 def halve_batch(per_device: int, accum: int) -> Tuple[int, int]:
     """Half the batch per device, more accumulation, same effective batch. Used after running out of memory."""
     if per_device <= 1:
@@ -489,6 +513,7 @@ class TrainResult:
     step_seconds: List[float] = field(default_factory=list)
     peak_memory_gb: Optional[float] = None
     train_losses: List[float] = field(default_factory=list)
+    eval_batch_size: int = 0
 
 
 def train(
@@ -620,17 +645,20 @@ def train(
         trainer_dir = tempfile.mkdtemp(prefix="argubot-timing-") if timing else checkpoint_dir
         start = time.time()
         while True:
+            # Validation is forward-only but still builds the full logits, so it gets its own
+            # (smaller) batch, and never a bigger one than training is using after a retry.
+            eval_bs = min(int(t.get("eval_batch_size") or per_device), per_device)
             desired = dict(
                 output_dir=trainer_dir,
                 per_device_train_batch_size=per_device,
-                per_device_eval_batch_size=per_device,
+                per_device_eval_batch_size=eval_bs,
                 gradient_accumulation_steps=accum,
                 learning_rate=float(t["learning_rate"]),
                 num_train_epochs=t["num_epochs"],
                 warmup_ratio=float(t.get("warmup_ratio") or 0.0),
                 fp16=precision == "fp16",
                 bf16=precision == "bf16",
-                logging_steps=5 if timing else 10,
+                logging_steps=1 if timing else 10,   # the timing test checks every step's loss
                 save_strategy="steps" if save_steps else "no",
                 save_steps=save_steps or 500,          # not used when save_strategy is "no"
                 save_total_limit=int(t.get("save_total_limit") or 2),
@@ -688,7 +716,7 @@ def train(
             model=model, tokenizer=tokenizer, train_dataset=train_ds, val_dataset=val_ds,
             trainable_params=trainable, total_params=total, train_seconds=job_seconds,
             model_name=model_name, adapter_dir=adapter_dir, device=device, precision=precision,
-            per_device_batch_size=per_device, grad_accum_steps=accum,
+            per_device_batch_size=per_device, grad_accum_steps=accum, eval_batch_size=eval_bs,
             global_step=state.global_step, max_steps=state.max_steps,
             step_seconds=list(timer.seconds), peak_memory_gb=peak,
             train_losses=[float(e["loss"]) for e in state.log_history if "loss" in e],
@@ -721,6 +749,7 @@ def train(
             "gpu": gpu,
             "per_device_batch_size": per_device,
             "grad_accum_steps": accum,
+            "eval_batch_size": eval_bs,
             "effective_batch": per_device * accum,
             "epochs": t["num_epochs"],
             "warmup_ratio": float(t.get("warmup_ratio") or 0.0),

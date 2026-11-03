@@ -17,4 +17,11 @@ generator:
   fallback_model: null
 
 training:
-  precision: bf16
+  precision: bf16       # bf16 does not overflow the way fp16 can on a bigger model
+  # Same effective batch of 16 as the 0.8B run, split 2 x 8 instead of 4 x 4. Qwen's 248k-word
+  # vocabulary makes the logits of a batch of 4 about 4 GB in fp32 (plus as much again for the
+  # loss), which does not fit next to the 4B weights on a 24 GB RTX 3090. Splitting the batch
+  # changes the memory, not the training.
+  per_device_batch_size: 2
+  grad_accum_steps: 8
+  eval_batch_size: 2

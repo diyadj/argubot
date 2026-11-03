@@ -59,6 +59,10 @@ fi
 module purge
 module load Python/3.11.11-GCCcore-13.3.0     # the venv's base Python (pyvenv.cfg); provides libpython3.11
 source "$VENV/bin/activate"
+# Lets PyTorch grow its memory blocks instead of leaving gaps it cannot reuse. Qwen's big
+# vocabulary asks for a few GB at a time, and without this a 24 GB card ran out with 5 GB
+# reserved but unused. It changes how memory is handed out, not any result.
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 python3 -c "import torch, argubot; print('torch', torch.__version__, 'cuda', torch.cuda.is_available())" || exit 1
 

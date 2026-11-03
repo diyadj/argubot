@@ -67,7 +67,10 @@ training:
   grad_accum_steps: 4             # effective batch = per_device_batch_size x this = 16
   learning_rate: 2.0e-4
   num_epochs: 3
-  warmup_ratio: 0.03
+  # 0.0 because that is what the 0.8B adapter really got: transformers 5.x renamed this setting to
+  # warmup_steps and the old train() dropped it with a one-line "does not accept" note. Keeping 0.0
+  # records what happened and keeps the 4B run the same. train() now passes the value through.
+  warmup_ratio: 0.0
   # fp16, bf16 or fp32. The 0.8B adapter was trained in fp16 because a Colab T4 has no bf16.
   # Any cluster card (3090, A40, L40S, H100) can do bf16, which is safer for bigger models.
   precision: fp16

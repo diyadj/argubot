@@ -9,6 +9,17 @@ interval over debates, and a star marks one that excludes zero.
 - 0.8B: `outputs/transcripts_fix`, scored into `outputs/results_fix` (the run after the 30 Oct trim fix).
 - 4B: `outputs/transcripts_4b`, scored into `outputs/results_4b` (job 352497, scored by job 352499).
 
+## Summary
+
+Neither retrieval, the claim log nor the stance filter changes the contradiction rate
+significantly, in either model. The claim log does point the right way in both (24 then 17
+contradicting turns of 200 at 0.8B, 17 then 9 at 4B), so the honest description is a consistent
+but unconfirmed reduction: 200 judged turns per system is too few to confirm an effect this size.
+Reranking (D) is the only significant drop, and it also makes the replies shorter and less
+assertive than the proposal's 10% guardrail allows. The 4B model fits CMV replies far better
+(perplexity 13.29 against 21.64) and its full system contradicts itself significantly less than
+the 0.8B one, but on the metric we trust the claim log's effect is no larger with the bigger model.
+
 ## Which metric to believe
 
 The **strict metric** is the headline. The original metric (RoBERTa-MNLI, threshold 0.5) flags 85%
@@ -47,20 +58,25 @@ On the original metric the 0.8B claim log looked harmful: C1 had significantly m
 sentences than B (+0.061 [+0.016, +0.107]). At 4B that difference is gone (-0.002 [-0.044, +0.041]).
 One reading is that the small model echoes the claims it is shown in garbled ways that RoBERTa
 reads as contradictions, and the bigger model does not. The strict metric shows no such effect at
-0.8B, so treat this as a hint, not a finding.
+0.8B, so treat this as a hint, not a finding (the next sections test it properly).
 
-## Every component, strict metric, per turn
+## Every component against the system before it (strict)
 
-Against B, from `evaluate.py --baseline B`:
+Each system adds one component to the one before it, so these steps are the proposal's
+one-change-at-a-time comparisons (from `scripts/compare_models.py`):
 
-| Comparison | 0.8B | 4B |
-| --- | --- | --- |
-| A against B (taking retrieval away) | -0.050 [-0.110, +0.005] | -0.015 [-0.065, +0.035] |
-| C2 against B | -0.050 [-0.100, +0.005] | -0.010 [-0.065, +0.050] |
-| D against B | **-0.080 [-0.135, -0.030] \*** | **-0.080 [-0.115, -0.045] \*** |
+| Step | 0.8B per turn | 4B per turn | 0.8B per sentence | 4B per sentence |
+| --- | --- | --- | --- | --- |
+| B - A, retrieval | +0.050 [-0.005, +0.110] | +0.015 [-0.035, +0.065] | +0.008 [-0.008, +0.025] | +0.006 [-0.005, +0.019] |
+| C1 - B, claim log | -0.035 [-0.090, +0.015] | -0.040 [-0.090, +0.010] | -0.007 [-0.022, +0.008] | -0.004 [-0.019, +0.010] |
+| C2 - C1, stance filter | -0.015 [-0.060, +0.025] | +0.030 [-0.010, +0.075] | -0.004 [-0.016, +0.010] | +0.007 [-0.009, +0.024] |
+| D - C2, reranking | -0.030 [-0.075, +0.010] | **-0.070 [-0.120, -0.030] \*** | -0.004 [-0.019, +0.010] | **-0.019 [-0.035, -0.006] \*** |
 
-`python scripts/compare_models.py` adds the step by step comparisons (C2 against C1, D against C2)
-for both models from the same files.
+Only one step passes: reranking at 4B. At 0.8B reranking on its own is not significant, though D
+is still significantly below B (-0.080 [-0.135, -0.030], from `evaluate.py --baseline B`) once the
+whole chain is counted. The stance filter points in opposite directions in the two models, which is
+what no effect looks like, and retrieval, if anything, raises the rate slightly in both (not
+significantly), which fits the off-topic BM25 evidence noted in `docs/DATA_NOTES.md`.
 
 ## Guardrails: are the systems just saying less?
 
@@ -80,22 +96,46 @@ Distinct-2 stays between 0.50 and 0.54 for every system in both runs, against 0.
 replies, so the generated text is noticeably more repetitive than people's. No step makes it more
 repetitive by more than about 1% (B against A at 0.8B, C2 against C1 at 4B), well inside the guardrail.
 
-**System D** is the only component with a significant drop in contradictions, at both sizes. It
-also cuts claims per turn by 26% (0.8B) and 15% (4B), past the 10% guardrail. Part of its
+**System D** is the only system significantly below B at both sizes, and at 4B the reranking step
+on its own is significant too. It also cuts claims per turn by 26% (0.8B) and 15% (4B), past the
+10% guardrail. Part of its
 consistency is therefore saying less, and the reranker uses an NLI model to pick the reply, which
 the metric then judges with another NLI model. The human ratings are the way to tell whether D's
 shorter replies still answer the user.
 
 ## What the 4B run adds
 
-- **Perplexity.** 21.64 (0.8B) against 13.29 (4B) on the same validation set, so the 4B adapter
-  models CMV replies far better (`docs/DATA_NOTES.md`).
-- **Fewer contradictions in most systems.** B, C1 and D all drop, and the 4B claim-log system (C1,
-  4.5% of turns) sits below the real CMV replies (5.7%). `scripts/compare_models.py` gives paired
-  intervals for each system across the two models.
-- **The same direction for the claim log.** It helps a little in both, a bit more at 4B, and not
-  significantly in either. Whether the effect really grows with model size is the change row of
-  `compare_models.py`.
+**Perplexity.** 21.64 (0.8B) against 13.29 (4B) on the same validation set, so the 4B adapter
+models CMV replies far better (`docs/DATA_NOTES.md`).
+
+**Contradictions, system by system, 4B minus 0.8B on the same debates (strict):**
+
+| System | 0.8B | 4B | Per turn | Per sentence |
+| --- | --- | --- | --- | --- |
+| A | 0.070 | 0.070 | +0.000 [-0.050, +0.045] | -0.006 [-0.019, +0.005] |
+| B | 0.120 | 0.085 | -0.035 [-0.100, +0.030] | -0.009 [-0.026, +0.007] |
+| C1 | 0.085 | 0.045 | -0.040 [-0.090, +0.010] | -0.007 [-0.021, +0.008] |
+| C2 | 0.070 | 0.075 | +0.005 [-0.045, +0.055] | +0.004 [-0.013, +0.022] |
+| D | 0.040 | 0.005 | **-0.035 [-0.070, -0.005] \*** | **-0.011 [-0.023, -0.001] \*** |
+
+The 4B rates are lower for B, C1 and D, and the 4B claim-log system sits below the real CMV
+replies (4.5% against 5.7% of turns), but paired over the same debates only the full system D is
+significantly lower than its 0.8B counterpart.
+
+**Does the claim log matter more with the bigger model?** This was the reason for the 4B run. The
+claim log's effect (C1 minus B) in each model, and how it changes:
+
+| | Strict per turn | Strict per sentence | Original per turn | Original per sentence |
+| --- | --- | --- | --- | --- |
+| 0.8B effect | -0.035 [-0.090, +0.015] | -0.007 [-0.022, +0.008] | +0.040 [-0.005, +0.090] | **+0.061 [+0.016, +0.107] \*** |
+| 4B effect | -0.040 [-0.090, +0.010] | -0.004 [-0.019, +0.010] | -0.020 [-0.065, +0.025] | -0.002 [-0.044, +0.041] |
+| Change, 4B minus 0.8B | -0.005 [-0.080, +0.075] | +0.002 [-0.019, +0.024] | -0.060 [-0.130, +0.010] | **-0.063 [-0.121, -0.005] \*** |
+
+On the strict metric the effect is the same size in both models, so the 4B run does not show the
+claim log mattering more with a stronger generator. The one significant change is on the original
+metric, where the 0.8B claim log made sentences look more contradictory and the 4B one did not.
+That fits the idea that a small model handles the claim slot badly, but it rests on the metric
+that also flags 85% of human replies, so it is weak evidence and should be reported as such.
 
 ## Limitations to state
 

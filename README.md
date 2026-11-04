@@ -52,6 +52,9 @@ Steps 1 to 5 are already done: the test debates and training examples are commit
 
 ## The 4B run
 
+The results of both runs, side by side and with what they mean, are in `docs/RESULTS.md`.
+
+
 A second adapter on Qwen3.5-4B-Base, to see whether the claim log matters more with a stronger generator. `configs/config_4b.yaml` builds on `configs/config.yaml` and only changes the model, the precision (bf16), the epochs (1, because the 0.8B run overfit after its first), how the batch of 16 is split (2 x 8), and the output folders (`outputs/*_4b`), so it can never overwrite the 0.8B files. Pass `--config configs/config_4b.yaml` to any script, or set `CONFIG_PATH` in the notebooks. `configs/config_2b.yaml` is the same with Qwen3.5-2B-Base, in case 4B is too slow. The step by step plan, with the cluster commands and what to do when something goes wrong, is in `docs/UPGRADE_TO_4B.md`. Before any job, `python scripts/preflight.py --config <config> --stage <timing|train|run|eval|demo>` checks that everything it needs is there.
 
 ## What is finished and what is not

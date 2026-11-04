@@ -153,6 +153,31 @@ on the group login, with a copy in `$S/outputs/adapter_4b` in scratch, and carri
 validation perplexity). It only works on top of `Qwen/Qwen3.5-4B-Base`; the generator refuses to
 load it on any other base model.
 
+Trained on 4 Nov (job 352125). The two adapters side by side:
+
+| | 0.8B adapter | 4B adapter |
+| --- | --- | --- |
+| Base model | Qwen/Qwen3.5-0.8B-Base | Qwen/Qwen3.5-4B-Base |
+| Epochs | 3 | 1 (the 0.8B validation loss was lowest after epoch 1) |
+| Precision | fp16 | bf16 |
+| Batch per GPU x accumulation | 4 x 4 | 2 x 8 (16 per step either way) |
+| Trainable parameters | 10,822,656 (1.42%) | 32,464,896 (0.77%) |
+| GPU and training time | RTX 3090, 10,992 s (3.1 h) | NVIDIA L40S, 5,593 s (1.6 h) |
+| Validation loss at the end | 3.074 | 2.598 |
+| Validation perplexity (reply tokens, every slot filled) | 21.64 | 13.29 |
+| Peak GPU memory | not recorded | 14.35 GB |
+
+The two perplexities can be compared directly: the same tokenizer, the same 2,282 validation
+examples with every slot filled, and the same `perplexity()` in `src/argubot/eval/metrics.py`. The 4B
+adapter is lower than the 0.8B one even at the 0.8B run's best epoch (19.45). Before any training, the
+4B base model's loss on the first training batches was already about 2.6 to 2.7 (timing test, job
+352080), below the 0.8B adapter's best validation loss, so a large part of the gap is the base model
+itself rather than the fine-tuning. The 0.8B trainable count is from the smoke test, which used the
+same model and LoRA settings.
+
+A 3-debate check run (job 352127, `outputs/check3_4b`, under 4 minutes for all five systems) gave
+fluent, on-topic replies that read like CMV comments, with the bot keeping its side across turns.
+
 ## How to reproduce
 
 ```

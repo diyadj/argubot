@@ -297,6 +297,10 @@ sbatch --time=01:00:00 scripts/violet_train.sbatch configs/config_2b.yaml --timi
 
 ## For the report
 
+The results of both runs are written up in `docs/RESULTS.md`, and `python scripts/compare_models.py`
+compares the two models debate by debate.
+
+
 - Why the second model: the floor-effect argument above, and that the scale comparison changes nothing but the model.
 - From `outputs/adapter_4b/training_summary.json`: trainable parameters, training time and GPU, batch per device times accumulation, validation perplexity next to the 0.8B one (21.64; 19.45 after its best epoch, see `docs/DATA_NOTES.md`). Same tokenizer, so the two perplexities are comparable.
 - From `outputs/timing/`: seconds per step on each card, if we compare costs.

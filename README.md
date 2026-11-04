@@ -73,7 +73,7 @@ A second adapter on Qwen3.5-4B-Base, to see whether the claim log matters more w
 | Retrieval-stance test on the 71 motions | Done: `scripts/eval_retrieval_stance.py` (BM25 and dense), results in `docs/DATA_NOTES.md` |
 | Stance alignment | Done as a tested utility, not wired into the pipeline |
 | Training run | Done: full data, 3 epochs, validation perplexity 21.64 (lowest after epoch 1, see `docs/DATA_NOTES.md`); adapter on the cluster scratch (`docs/DATA_NOTES.md`). Trained without warmup (transformers 5.x dropped the setting; see `docs/UPGRADE_TO_4B.md`) |
-| 4B run | Ready to run: config, bf16, checkpoints and resume, timing test, preflight checks (`docs/UPGRADE_TO_4B.md`) |
+| 4B run | Adapter trained: 1 epoch, 1.6 h on an L40S, validation perplexity 13.29 against 21.64 for 0.8B (`docs/DATA_NOTES.md`). 3-debate check done; the 100-debate run, evaluation and ratings are next (`docs/UPGRADE_TO_4B.md`) |
 | Notebooks | Done, see `notebooks/README.md` |
 | Five-system run, evaluation, human ratings | Next: 3-debate check, then the 100-debate run |
 | Training data builder | Done and tested, needs `build_indexes.py` first |

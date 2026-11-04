@@ -114,6 +114,7 @@ export default function App() {
           </div>
         </div>
         {info?.dummy && <span className="pill warn">Dummy mode: canned replies</span>}
+        {!info?.dummy && info?.model && <span className="pill" title="Base model behind the adapter">{info.model}</span>}
       </header>
 
       <section className="systems">

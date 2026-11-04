@@ -2,6 +2,7 @@
 
     python scripts/serve_demo.py --dummy        # fake components, no downloads, checks the page works
     python scripts/serve_demo.py                # real adapter, passages and NLI model (needs a GPU or patience)
+    python scripts/serve_demo.py --config configs/config_4b.yaml   # the same with the 4B model and adapter
 
 Then open http://127.0.0.1:8000. On the GPU cluster add --host 0.0.0.0 and tunnel the port (docs/RUN_ON_VIOLET.md). It uses only the standard library, so nothing extra to install.
 The chat goes through ArguBotPipeline.step, the same code path the evaluated systems use.
@@ -31,6 +32,8 @@ class Demo:
         }
         self.sessions = {}  # session id -> (system name, history, tracker, turn count)
         self.dummy = dummy
+        # Shown in the page header, so nobody has to guess which model is answering.
+        self.model = "canned replies" if dummy else cfg["generator"]["base_model"].split("/")[-1]
 
     def new_session(self, system: str) -> str:
         sid = uuid.uuid4().hex[:8]
@@ -65,7 +68,7 @@ def make_handler(demo: Demo):
             if self.path == "/":
                 self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
             elif self.path == "/api/info":
-                self._json(200, {"systems": list(demo.pipelines), "dummy": demo.dummy})
+                self._json(200, {"systems": list(demo.pipelines), "dummy": demo.dummy, "model": demo.model})
             else:
                 self._send(404, b"not found", "text/plain")
 
@@ -103,7 +106,7 @@ def main() -> None:
 
     demo = Demo(load_config(args.config), args.dummy)
     # flush: under nohup the output is a file, and without it "ready" never shows in the log
-    print(f"ArguBot demo on http://{args.host}:{args.port}" + ("  (DUMMY components)" if args.dummy else ""), flush=True)
+    print(f"ArguBot demo ({demo.model}) on http://{args.host}:{args.port}" + ("  (DUMMY components)" if args.dummy else ""), flush=True)
     ThreadingHTTPServer((args.host, args.port), make_handler(demo)).serve_forever()
 
 

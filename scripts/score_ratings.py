@@ -22,6 +22,7 @@ def main() -> None:
     ap.add_argument("--config", default="configs/config.yaml")
     ap.add_argument("--dir", default=None, help="folder with the sheets (default: paths.rating_dir)")
     ap.add_argument("--allow-problems", action="store_true", help="score anyway, skipping blank cells")
+    ap.add_argument("--results", default=None, help="folder for human_eval.json (default: paths.results_dir)")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -56,7 +57,7 @@ def main() -> None:
     for system in sorted(means):
         print(f"{system:<8}" + "".join(f"{means[system].get(c, float('nan')):>26.2f}" for c in CRITERIA))
 
-    out = ensure_dir(cfg["paths"]["results_dir"]) / "human_eval.json"
+    out = ensure_dir(args.results or cfg["paths"]["results_dir"]) / "human_eval.json"
     out.write_text(json.dumps({"kappa": kappas, "mean_scores": means}, indent=2))
     print(f"\nSaved to {out}")
 

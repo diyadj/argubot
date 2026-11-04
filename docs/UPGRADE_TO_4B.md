@@ -228,30 +228,44 @@ in `outputs/results_4b/eval.log`.
 
 ## Step 7. Human ratings for 4B
 
-All five systems, the same as for 0.8B:
+Everything for the raters, including the 0.8B sheets, the scoring rules and copying the sheets
+to and from a laptop, is in `docs/HUMAN_RATINGS.md`. Hand that page to whoever runs the ratings.
+In short:
 
 ```bash
 python scripts/make_rating_sheets.py --config configs/config_4b.yaml
 ```
 
-If the raters are short on time, the core test only (C1 against B):
-
-```bash
-python scripts/make_rating_sheets.py --config configs/config_4b.yaml --systems B C1
-```
-
-The sheets go to `outputs/human_eval_4b/`, and `python scripts/score_ratings.py --config configs/config_4b.yaml` scores them.
+makes the sheets in `outputs/human_eval_4b/` (add `--systems B C1` for the core test only), and
+`python scripts/score_ratings.py --config configs/config_4b.yaml` scores them once they are back.
 
 ## Step 8 (optional). The demo on 4B
 
-In a `mynotebook` terminal on the GPU node, exactly as in `docs/RUN_ON_VIOLET.md` but with the 4B config:
+The demo is the same page as before. Only the config changes, and the page header shows which
+model is answering (`Qwen3.5-4B-Base` or `Qwen3.5-0.8B-Base`).
 
-```bash
-python scripts/serve_demo.py --config configs/config_4b.yaml --host 0.0.0.0 --port 8000
-```
+1. Wait until `myqueue` is empty. `mynotebook` is a job too, and the group can only have two
+   submitted at once, so it will not start while a run and an eval are queued.
+2. Start a GPU notebook with `mynotebook` and open a terminal in it (`docs/RUN_ON_VIOLET.md`, steps 3 to 5).
+3. In that terminal:
 
-Replies will be slower than with 0.8B. If the 4B adapter is not ready by 10 Nov, demo the 0.8B one.
-In the notebooks, set `CONFIG_PATH = "configs/config_4b.yaml"` in the config cell.
+   ```bash
+   cd ~/argubot && python scripts/serve_demo.py --config configs/config_4b.yaml --host 0.0.0.0 --port 8000
+   ```
+
+   It takes a few minutes to load. It is ready when it prints `ArguBot demo (Qwen3.5-4B-Base) on http://0.0.0.0:8000`.
+4. On your laptop, in another PowerShell, tunnel the port. The node name is in the `mynotebook`
+   tunnel line, for example `lucas`:
+
+   ```bash
+   ssh -N -L 8000:<node>:8000 CS425G3@10.193.104.102
+   ```
+
+5. Open http://127.0.0.1:8000.
+
+Leave out `--config configs/config_4b.yaml` to demo the 0.8B model instead. Replies are slower
+with 4B. In the notebooks, set `CONFIG_PATH = "configs/config_4b.yaml"` in the config cell. On
+presentation day, start the notebook an hour early and keep the queue empty.
 
 ## If 4B is too slow
 

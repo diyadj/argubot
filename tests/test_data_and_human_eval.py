@@ -131,3 +131,11 @@ def test_kappa_ignores_stray_spaces_and_bad_cells_are_reported(tmp_path):
     assert check_sheet(str(tmp_path / "r1.csv"), ["item000", "item001"]) == []
     problems = check_sheet(str(tmp_path / "r2.csv"), ["item000", "item001", "item002"])
     assert problems == ["item002: missing from the sheet", "item001 used_support_correctly: 'yes' is not 0 or 1"]
+
+
+def test_sheets_saved_by_excel_with_a_byte_order_mark_still_read(tmp_path):
+    # Excel's "CSV UTF-8" puts a BOM before the header, which used to hide the item_id column.
+    header = "item_id,dialogue,kept_position,answered_counterargument,used_support_correctly,notes\n"
+    (tmp_path / "r1.csv").write_text(header + "item000,x,1,0,1,\nitem001,x,0,1,1,\n", encoding="utf-8-sig")
+    (tmp_path / "r2.csv").write_text(header + "item000,x,1,0,1,\nitem001,x,0,1,1,\n", encoding="utf-8")
+    assert kappa_per_criterion(str(tmp_path / "r1.csv"), str(tmp_path / "r2.csv"))["kept_position"] == 1.0

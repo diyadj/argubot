@@ -72,7 +72,7 @@ def make_rating_sheets(
 
 
 def _read(path: str) -> Dict[str, dict]:
-    with open(path, newline="", encoding="utf-8") as f:
+    with open(path, newline="", encoding="utf-8-sig") as f:
         return {row["item_id"]: row for row in csv.DictReader(f)}
 
 

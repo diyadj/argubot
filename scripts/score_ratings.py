@@ -30,7 +30,7 @@ def main() -> None:
     key = str(rdir / "key_PRIVATE.csv")
     sheets = [str(rdir / f"rater_{r + 1}.csv") for r in range(cfg["eval"]["n_raters"])]
 
-    with open(key, newline="", encoding="utf-8") as f:
+    with open(key, newline="", encoding="utf-8-sig") as f:
         items = [row["item_id"] for row in csv.DictReader(f)]
     found = False
     for sheet in sheets:

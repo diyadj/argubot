@@ -2,6 +2,7 @@
 
     python scripts/make_precision_sheet.py            # after evaluate.py --human --strict
     python scripts/make_precision_sheet.py --score    # after the sheet is filled in
+    python scripts/make_precision_sheet.py --score --dir data/precision_ratings/4b --results outputs/results_4b
 
 Takes up to --n flagged pairs per system and from the real CMV replies (one pair per flagged turn,
 so a long debate cannot dominate), shuffles them and writes precision_sheet.csv with no system
@@ -49,16 +50,18 @@ def make(cfg, n: int) -> None:
     print(f"wrote {len(rows)} pairs to {out / 'precision_sheet.csv'} (key: precision_key_PRIVATE.csv)")
 
 
-def score(cfg) -> None:
-    out = Path(cfg["paths"]["rating_dir"])
-    with open(out / "precision_key_PRIVATE.csv", newline="", encoding="utf-8") as f:
+def score(cfg, sheet_dir=None, results_dir=None) -> None:
+    out = Path(sheet_dir or cfg["paths"]["rating_dir"])
+    results = Path(results_dir or cfg["paths"]["results_dir"])
+    # utf-8-sig: Excel and Google Sheets save "CSV UTF-8" with a byte-order mark.
+    with open(out / "precision_key_PRIVATE.csv", newline="", encoding="utf-8-sig") as f:
         key = {r["pair_id"]: r["system"] for r in csv.DictReader(f)}
-    with open(out / "precision_sheet.csv", newline="", encoding="utf-8") as f:
+    with open(out / "precision_sheet.csv", newline="", encoding="utf-8-sig") as f:
         labels = {r["pair_id"]: r["real_contradiction"].strip() for r in csv.DictReader(f)}
     bad = [i for i, v in labels.items() if v not in ("0", "1")]
     if bad:
         sys.exit(f"{len(bad)} pairs are not marked 0 or 1, e.g. {bad[:5]}")
-    metrics = json.loads((Path(cfg["paths"]["results_dir"]) / "metrics_strict.json").read_text())
+    metrics = json.loads((results / "metrics_strict.json").read_text())
 
     print(f"{'Source':<8}{'Labelled':>9}{'Real':>6}{'Precision':>10}{'Per turn':>10}{'x precision':>12}")
     summary = {}
@@ -70,7 +73,7 @@ def score(cfg) -> None:
         rate = metrics[source]["contradiction_rate"]
         summary[source] = {"labelled": len(marks), "real": sum(marks), "precision": precision, "corrected_rate": rate * precision}
         print(f"{source:<8}{len(marks):>9}{sum(marks):>6}{precision:>10.2f}{rate:>10.3f}{rate * precision:>12.3f}")
-    path = ensure_dir(cfg["paths"]["results_dir"]) / "precision_strict.json"
+    path = ensure_dir(str(results)) / "precision_strict.json"
     path.write_text(json.dumps(summary, indent=2))
     print(f"\nSaved to {path}. 'x precision' is approximate: it assumes a flagged turn's other pairs are as real as the one labelled.")
 
@@ -80,9 +83,11 @@ def main() -> None:
     ap.add_argument("--config", default="configs/config.yaml")
     ap.add_argument("--n", type=int, default=30, help="pairs per system")
     ap.add_argument("--score", action="store_true")
+    ap.add_argument("--dir", default=None, help="folder with the filled sheet and key (default: paths.rating_dir)")
+    ap.add_argument("--results", default=None, help="folder with metrics_strict.json (default: paths.results_dir)")
     args = ap.parse_args()
     cfg = load_config(args.config)
-    score(cfg) if args.score else make(cfg, args.n)
+    score(cfg, args.dir, args.results) if args.score else make(cfg, args.n)
 
 
 if __name__ == "__main__":

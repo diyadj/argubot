@@ -100,8 +100,8 @@ repetitive by more than about 1% (B against A at 0.8B, C2 against C1 at 4B), wel
 on its own is significant too. It also cuts claims per turn by 26% (0.8B) and 15% (4B), past the
 10% guardrail. Part of its
 consistency is therefore saying less, and the reranker uses an NLI model to pick the reply, which
-the metric then judges with another NLI model. The human ratings are the way to tell whether D's
-shorter replies still answer the user.
+the metric then judges with another NLI model. The human ratings (below) find that at 4B D's
+shorter replies still answer the user about as often as B's.
 
 ## What the 4B run adds
 
@@ -137,6 +137,63 @@ metric, where the 0.8B claim log made sentences look more contradictory and the 
 That fits the idea that a small model handles the claim slot badly, but it rests on the metric
 that also flags 85% of human replies, so it is weak evidence and should be reported as such.
 
+## Human ratings
+
+Two raters per run each scored the same 20 test debates for all five systems (100 items),
+blind to the system, on the three questions in `docs/HUMAN_RATINGS.md`. The sheets are in
+`data/human_ratings/`. A debate's score is the share of raters who gave it 1. Intervals are
+paired 95% bootstraps over the 20 debates.
+
+**Agreement (Cohen's kappa).**
+
+| Question | 0.8B | 4B |
+| --- | --- | --- |
+| kept_position | 0.64 (85/100 agree) | 0.63 (86/100) |
+| answered_counterargument | 0.72 (92/100) | 0.64 (85/100) |
+| used_support_correctly | -0.06 (89/100) | 0.31 (70/100) |
+
+The first two questions show substantial agreement at both sizes. used_support_correctly does
+not: at 0.8B almost every item is 0 (94 and 95 of 100), so kappa is uninformative, and at 4B it is
+only fair. Treat the support scores as indicative only.
+
+**Mean scores (share of debates scored 1).**
+
+| System | 0.8B kept | 0.8B answered | 0.8B support | 4B kept | 4B answered | 4B support |
+| --- | --- | --- | --- | --- | --- | --- |
+| A | 0.68 | 0.88 | 0.05 | 0.75 | 0.80 | 0.30 |
+| B | 0.68 | 0.85 | 0.05 | 0.72 | 0.65 | 0.23 |
+| C1 | 0.72 | 0.80 | 0.05 | 0.68 | 0.60 | 0.33 |
+| C2 | 0.75 | 0.88 | 0.07 | 0.72 | 0.78 | 0.30 |
+| D | 0.70 | 0.75 | 0.05 | 0.88 | 0.70 | 0.35 |
+
+**Paired differences that matter for the claims above.**
+
+| | 0.8B kept | 0.8B answered | 4B kept | 4B answered |
+| --- | --- | --- | --- | --- |
+| C1 - B, claim log | +0.05 [-0.23, +0.30] | -0.05 [-0.17, +0.05] | -0.05 [-0.12, +0.00] | -0.05 [-0.20, +0.10] |
+| C2 - C1, stance filter | +0.03 [-0.20, +0.25] | +0.07 [+0.00, +0.20] | +0.05 [-0.05, +0.17] | **+0.17 [+0.05, +0.35] \*** |
+| D - B, whole chain | +0.03 [-0.23, +0.28] | -0.10 [-0.33, +0.10] | +0.15 [-0.07, +0.38] | +0.05 [-0.20, +0.30] |
+
+**What they show.**
+
+- **The claim log.** Humans see no gain in keeping position at either size. Together with the
+  strict metric's non-significant drop, nothing supports the claim log improving consistency.
+- **Reranking.** At 4B, D keeps its position in 88% of debates against 72% for B, the same
+  direction as the metric's one significant result, but not significant with 20 debates. At 4B,
+  D answers the user's point about as often as B, so its shorter replies are not just dodging. At
+  0.8B, D has the lowest answered score (0.75), also not significant.
+- **The stance filter** is the one significant step: at 4B, C2 answers the counterargument more
+  often than C1. With this many comparisons and 20 debates, it is a lead, not a finding.
+- **Humans see more inconsistency than the metric.** About 25 to 30% of debates fail
+  kept_position for every system, while the strict metric flags at most 12% of turns. Humans also
+  count concessions that give up the side, which NLI does not look for, so the strict metric is a
+  conservative measure of position keeping.
+- **4B against 0.8B**, averaged over the five systems on the same debates: support is much better
+  (+0.25 [+0.14, +0.35]), answering the counterargument is worse (-0.12 [-0.23, -0.02]), and
+  keeping position is unchanged (+0.04 [-0.10, +0.19]). The two runs had different rater pairs,
+  so part of these gaps may come from how strict each pair was.
+- **Power.** With 20 debates, only differences of roughly 25 points can show as significant.
+
 ## Limitations to state
 
 - **Power.** 200 judged turns per system gives intervals about 5 points wide either side, so an
@@ -144,8 +201,10 @@ that also flags 85% of human replies, so it is weak evidence and should be repor
 - **The models differ in more than size.** 0.8B was trained for 3 epochs in fp16 and 4B for 1 epoch
   in bf16 (both without warmup; `docs/UPGRADE_TO_4B.md`).
 - **Automatic judges.** The strict metric was calibrated on 24 labelled pairs; how many of its flags
-  are real is measured by the precision sheet (`scripts/make_precision_sheet.py`). Human ratings
-  (`docs/HUMAN_RATINGS.md`) are the independent check.
+  are real is measured by the precision sheet (`scripts/make_precision_sheet.py`). The human
+  ratings are the independent check, and they are only 20 debates per system.
+- **Human-rating keys.** The keys in `data/human_ratings/` were rebuilt from the sheet script's seed,
+  not copied from the cluster (see `data/human_ratings/README.md`).
 - **Retrieval quality.** BM25 evidence is often off topic (`docs/DATA_NOTES.md`), which fits
   retrieval not helping here; a dense retriever is built but was not used in these runs.
 
@@ -165,4 +224,8 @@ python scripts/compare_models.py
 
 ```bash
 python scripts/compare_models.py --metric original
+```
+
+```bash
+python scripts/rating_differences.py
 ```

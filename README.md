@@ -76,9 +76,11 @@ A second adapter on Qwen3.5-4B-Base, to see whether the claim log matters more w
 | Retrieval-stance test on the 71 motions | Done: `scripts/eval_retrieval_stance.py` (BM25 and dense), results in `docs/DATA_NOTES.md` |
 | Stance alignment | Done as a tested utility, not wired into the pipeline |
 | Training run | Done: full data, 3 epochs, validation perplexity 21.64 (lowest after epoch 1, see `docs/DATA_NOTES.md`); adapter on the cluster scratch (`docs/DATA_NOTES.md`). Trained without warmup (transformers 5.x dropped the setting; see `docs/UPGRADE_TO_4B.md`) |
-| 4B run | Adapter trained: 1 epoch, 1.6 h on an L40S, validation perplexity 13.29 against 21.64 for 0.8B (`docs/DATA_NOTES.md`). 3-debate check done; the 100-debate run, evaluation and ratings are next (`docs/UPGRADE_TO_4B.md`) |
+| 4B run | Done: adapter trained (1 epoch, 1.6 h on an L40S, validation perplexity 13.29 against 21.64 for 0.8B, `docs/DATA_NOTES.md`), all five systems run on the 100 debates and evaluated (`docs/RESULTS.md`) |
 | Notebooks | Done, see `notebooks/README.md` |
-| Five-system run, evaluation, human ratings | Next: 3-debate check, then the 100-debate run |
+| Five-system run and evaluation | Done for both models: 0.8B in `outputs/transcripts_fix` (after the 30 Oct trim fix), 4B in `outputs/transcripts_4b`; results in `docs/RESULTS.md` |
+| Human ratings | Done for both models: two raters, 20 debates x 5 systems each (`data/human_ratings/`, results in `docs/RESULTS.md`) |
+| Precision of the strict metric | Done for both models: 87 (0.8B) and 66 (4B) flagged pairs labelled blind, 22% and 36% real (`data/precision_ratings/`, results in `docs/RESULTS.md`) |
 | Training data builder | Done and tested, needs `build_indexes.py` first |
 | Real download links | Done: `download_data.py --all` |
 

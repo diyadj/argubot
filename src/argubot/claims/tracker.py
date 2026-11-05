@@ -3,8 +3,8 @@
 Pulls declarative sentences out of the bot's own replies and keeps the most recent few,
 de-duplicated. This is the log that conditions the generator in systems C1, C2 and D.
 
-What works now: a regex fallback that runs anywhere, plus a spaCy path when
-en_core_web_sm is installed. What Tricia should improve is listed in the TODOs below.
+Two paths: a regex fallback that runs anywhere, plus a spaCy path when en_core_web_sm is
+installed. The filters were tuned by eye on 50 real CMV replies (docs/DATA_NOTES.md).
 """
 from __future__ import annotations
 

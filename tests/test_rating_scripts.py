@@ -42,3 +42,25 @@ def test_sheets_are_written_once_and_never_overwritten_by_accident(tmp_path):
     assert forced.returncode == 0
     assert "pretend someone rated this" not in sheet.read_text()
     assert (tmp_path / "sheets" / "key_PRIVATE.csv").exists()
+
+
+def test_precision_sheet_saved_as_csv_utf8_scores_from_any_folder(tmp_path):
+    # Excel and Google Sheets save "CSV UTF-8" with a byte-order mark; the scorer must still read it.
+    sheets, results = tmp_path / "precision", tmp_path / "results"
+    sheets.mkdir()
+    results.mkdir()
+    (sheets / "precision_key_PRIVATE.csv").write_text(
+        "pair_id,system,dialogue_id,turn,score\npair000,B,d0,1,0.9\npair001,human,d1,2,0.8\n", encoding="utf-8")
+    (sheets / "precision_sheet.csv").write_text(
+        "pair_id,earlier_claim,new_sentence,real_contradiction,notes\npair000,a,b,1,\npair001,c,d,0,\n",
+        encoding="utf-8-sig")
+    (results / "metrics_strict.json").write_text(json.dumps(
+        {"B": {"contradiction_rate": 0.1}, "human": {"contradiction_rate": 0.05}}))
+
+    run = subprocess.run(
+        [sys.executable, "scripts/make_precision_sheet.py", "--score", "--dir", str(sheets), "--results", str(results)],
+        cwd=ROOT, capture_output=True, text=True,
+    )
+    assert run.returncode == 0, run.stderr
+    summary = json.loads((results / "precision_strict.json").read_text())
+    assert summary["B"]["precision"] == 1.0 and summary["human"]["precision"] == 0.0

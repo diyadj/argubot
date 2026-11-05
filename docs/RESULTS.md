@@ -19,6 +19,9 @@ Reranking (D) is the only significant drop, and it also makes the replies shorte
 assertive than the proposal's 10% guardrail allows. The 4B model fits CMV replies far better
 (perplexity 13.29 against 21.64) and its full system contradicts itself significantly less than
 the 0.8B one, but on the metric we trust the claim log's effect is no larger with the bigger model.
+A blinded precision check found that only 22% (0.8B) and 36% (4B) of the strict metric's flags are
+real contradictions, and none of the flags on real CMV replies are, so the strict rates are an upper
+bound and real self-contradiction is rare for every system.
 
 ## Which metric to believe
 
@@ -194,14 +197,53 @@ only fair. Treat the support scores as indicative only.
   so part of these gaps may come from how strict each pair was.
 - **Power.** With 20 debates, only differences of roughly 25 points can show as significant.
 
+## Precision of the strict metric
+
+One team member labelled a blinded sample of the strict metric's flags: up to 30 flagged turns per
+system and from the real CMV replies, one claim/sentence pair per turn, with no system names on the
+sheet. A pair counts as real when the two sentences cannot both be true about the same thing. The
+sheets are in `data/precision_ratings/`. "Corrected" is the per-turn rate times the precision, which
+assumes a flagged turn's other pairs are as real as the one labelled, so it is approximate.
+
+| Source | 0.8B real / labelled | 0.8B precision | 0.8B corrected | 4B real / labelled | 4B precision | 4B corrected |
+| --- | --- | --- | --- | --- | --- | --- |
+| A | 2 / 14 | 0.14 | 0.010 | 4 / 14 | 0.29 | 0.020 |
+| B | 7 / 24 | 0.29 | 0.035 | 5 / 17 | 0.29 | 0.025 |
+| C1 | 3 / 17 | 0.18 | 0.015 | 6 / 9 | 0.67 | 0.030 |
+| C2 | 5 / 14 | 0.36 | 0.025 | 9 / 15 | 0.60 | 0.045 |
+| D | 2 / 8 | 0.25 | 0.010 | 0 / 1 | 0.00 | 0.000 |
+| Real CMV replies | 0 / 10 | 0.00 | 0.000 | 0 / 10 | 0.00 | 0.000 |
+| **All** | **19 / 87** | **0.22** | | **24 / 66** | **0.36** | |
+
+**What it shows.**
+
+- **Most flags are false alarms**, more so for the 0.8B model, whose messier text gives the NLI model
+  more to misread. The strict rates in the tables above are therefore upper bounds.
+- **None of the 20 flags on real CMV replies are real**, so the 5.7% reference line is entirely false
+  alarms: the people in the test debates essentially never contradicted themselves.
+- **After correction every system contradicts itself in about 1 to 4% of turns.**
+- **The claim log still shows no reliable effect.** Corrected, C1 is below B at 0.8B (0.015 against
+  0.035) and above it at 4B (0.030 against 0.025). A direction that flips between the models, on 9 to
+  24 labelled pairs per cell, is what no effect looks like, in line with the strict metric and the
+  human ratings.
+- **The metric also misses most switches humans see.** Of the rated debates where both raters gave
+  kept_position 0, the strict metric flagged a turn in 6 of 22 (0.8B) and 5 of 18 (4B). Of the debates
+  both raters scored as kept, it flagged 2 of 63 (0.8B) and 5 of 68 (4B). It catches few of the
+  inconsistencies humans see, and at 4B half of the debates it flags look consistent to both raters.
+
+**Caveats.** One labeller, so there is no agreement figure; a few pairs appear more than once in a sheet
+(systems that wrote the same reply, or one system repeating a sentence on a later turn), and each
+repeat got the same label;
+and the per-system samples are small, D at 4B especially (one flagged turn).
+
 ## Limitations to state
 
 - **Power.** 200 judged turns per system gives intervals about 5 points wide either side, so an
   effect of 3 to 4 points, the size the claim log shows, cannot be confirmed with this test set.
 - **The models differ in more than size.** 0.8B was trained for 3 epochs in fp16 and 4B for 1 epoch
   in bf16 (both without warmup; `docs/UPGRADE_TO_4B.md`).
-- **Automatic judges.** The strict metric was calibrated on 24 labelled pairs; how many of its flags
-  are real is measured by the precision sheet (`scripts/make_precision_sheet.py`). The human
+- **Automatic judges.** The strict metric was calibrated on 24 labelled pairs, and only 22% (0.8B) and
+  36% (4B) of its flags are real (see "Precision of the strict metric", one labeller). The human
   ratings are the independent check, and they are only 20 debates per system.
 - **Human-rating keys.** The keys in `data/human_ratings/` were rebuilt from the sheet script's seed,
   not copied from the cluster (see `data/human_ratings/README.md`).
@@ -228,4 +270,12 @@ python scripts/compare_models.py --metric original
 
 ```bash
 python scripts/rating_differences.py
+```
+
+```bash
+python scripts/make_precision_sheet.py --score --dir data/precision_ratings/0.8b --results outputs/results_fix
+```
+
+```bash
+python scripts/make_precision_sheet.py --score --dir data/precision_ratings/4b --results outputs/results_4b
 ```

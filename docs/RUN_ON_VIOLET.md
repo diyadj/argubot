@@ -100,6 +100,17 @@ ssh <yourAccount>@10.193.104.102 scancel <jobID>
 
 ## Run the chat demo on the cluster
 
+**One step, from a Windows laptop (SMU VPN on):**
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts\windows\start_demo.ps1
+```
+
+It starts the demo as a batch job (`scripts/violet_demo.sbatch`, 4B by default; add `-Config configs/config.yaml`
+for 0.8B), waits until the model has loaded, opens the tunnel and opens http://127.0.0.1:8000. Run it from your
+local copy of the repo. Stop the demo afterwards with `ssh CS425G3@10.193.104.102 scancel -n argubot-demo`.
+The manual steps below still work if you prefer them.
+
 The demo page and the bot run together on the GPU node; you open the page on your laptop through a second tunnel.
 
 1. Start a GPU notebook (steps 1–5 above). The built passages and indexes are already linked in `~/argubot`

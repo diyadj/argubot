@@ -21,7 +21,12 @@ fi
 
 for i in $(seq 1 240); do                     # up to 20 minutes
     LINE=$(job_line)
-    [ -n "$LINE" ] || { echo "The demo job ended. Check the newest $USER.demo.*.out log."; exit 1; }
+    if [ -z "$LINE" ]; then
+        echo "The demo job ended before the model was ready. End of its log:"
+        LOG=$(ls -t "$USER".demo.*.out 2>/dev/null | head -n 1)
+        [ -n "$LOG" ] && { echo "----- $LOG -----"; tail -n 25 "$LOG"; }
+        exit 1
+    fi
     read -r JOB STATE NODE <<< "$LINE"
     LOG="$USER.demo.$JOB.out"
     if [ "$STATE" = "RUNNING" ] && [ -f "$LOG" ] && grep -q "ArguBot demo" "$LOG"; then

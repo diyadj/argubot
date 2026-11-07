@@ -241,6 +241,11 @@ makes the sheets in `outputs/human_eval_4b/` (add `--systems B C1` for the core 
 
 ## Step 8 (optional). The demo on 4B
 
+Rehearse first. `sbatch scripts/violet_demo_test.sbatch` plays eight scripted demo debates
+through both models (systems A, C1, C2 and D, three runs each, about an hour), scores every run
+and ranks which debates and systems are safest to show live, with full transcripts of the best
+runs (`scripts/demo_rehearsal.py`, results in `outputs/demo_rehearsal/`).
+
 The demo is the same page as before. Only the config changes, and the page header shows which
 model is answering (`Qwen3.5-4B-Base` or `Qwen3.5-0.8B-Base`).
 

@@ -105,9 +105,15 @@ def main() -> None:
     args = ap.parse_args()
 
     demo = Demo(load_config(args.config), args.dummy)
-    # flush: under nohup the output is a file, and without it "ready" never shows in the log
+    try:
+        server = ThreadingHTTPServer((args.host, args.port), make_handler(demo))
+    except OSError as err:
+        # Usually an older demo (say one started in mynotebook) still holds the port on this node.
+        raise SystemExit(f"Could not open port {args.port}: {err}. Stop the other demo or pick another port.")
+    # Print only once the port is open, since scripts/start_demo.sh treats this line as "ready".
+    # flush: under nohup the output is a file, and without it the line never shows in the log
     print(f"ArguBot demo ({demo.model}) on http://{args.host}:{args.port}" + ("  (DUMMY components)" if args.dummy else ""), flush=True)
-    ThreadingHTTPServer((args.host, args.port), make_handler(demo)).serve_forever()
+    server.serve_forever()
 
 
 if __name__ == "__main__":
